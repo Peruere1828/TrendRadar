@@ -48,6 +48,20 @@
 
 <br>
 
+## 🍴 关于此 Fork
+
+本分支基于 [TrendRadar](https://github.com/sansan0/TrendRadar) v6.6.2，在原有功能基础上新增：
+
+| 新增功能 | 说明 |
+|---|---|
+| **人民网 Sitemap 爬虫** | 新增 `trendradar/crawler/people_cn.py`，通过 Sitemap + 页面标题抓取替代已废弃的 RSS，覆盖时政、财经、科技三个频道，支持独立展示区 |
+| **`/my_interest` 兴趣管理页** | 新增 `trendradar/webserver.py`，提供 Web 界面直接编辑 AI 兴趣描述，无需手动修改配置文件 |
+| **AI 模型切换** | 默认 AI 模型改为 `deepseek-v4-flash`，通过自定义 API 端点接入 |
+
+> 本项目按 [GPLv3](LICENSE) 协议发布，继承上游版权。
+
+<br>
+
 ## 📑 快速导航
 
 > 💡 **点击下方链接**可快速跳转到对应章节。部署推荐从「**快速开始**」入手，需要详细自定义请看「**配置详解**」
@@ -2787,47 +2801,69 @@ TrendRadar 提供两个独立的 Docker 镜像，可根据需求选择部署：
    docker compose stop trendradar-mcp  # 停止 MCP 服务
    ```
 
-#### 方式二：本地构建（开发者选项）
+#### 方式二：本地构建（完整 MCP 服务）
 
-如果需要自定义修改代码或构建自己的镜像：
+本 Fork 推荐本地构建，代码修改可直接打入镜像，无需文件挂载。
+
+**1. 克隆项目并配置**：
 
 ```bash
-# 克隆项目
-git clone https://github.com/sansan0/TrendRadar.git
+git clone https://github.com/Peruere1828/TrendRadar.git
 cd TrendRadar
 
-# 修改配置文件
-vim config/config.yaml
-vim config/frequency_words.txt
-
-# 使用构建版本的 docker compose
-cd docker
-cp docker-compose-build.yml docker-compose.yml
+# 编辑配置文件
+cp config/config.yaml.example config/config.yaml      # 如无则跳过
+vim config/config.yaml            # 核心功能配置
+vim config/frequency_words.txt    # 关键词配置
+vim docker/.env                   # API Key、Webhook 等敏感信息
 ```
 
-**构建并启动服务**：
+**2. 构建并启动完整服务（trendradar + MCP）**：
 
 ```bash
-# 选项 A：构建并启动所有服务
-docker compose build
-docker compose up -d
+cd docker
 
-# 选项 B：仅构建并启动新闻推送服务
-docker compose build trendradar
-docker compose up -d trendradar
-
-# 选项 C：仅构建并启动 MCP AI 分析服务
-docker compose build trendradar-mcp
-docker compose up -d trendradar-mcp
+# 直接构建并启动
+docker compose -f docker-compose-build.yml build --no-cache
+docker compose -f docker-compose-build.yml up -d
 ```
 
-> 💡 **架构参数说明**：
-> - 默认构建 `amd64` 架构镜像（适用于大多数 x86_64 服务器）
-> - 如需构建 `arm64` 架构（Apple Silicon、树莓派等），设置环境变量：
->   ```bash
->   export DOCKER_ARCH=arm64
->   docker compose build
->   ```
+> 构建完成后，`docker-compose-build.yml` 产生的本地镜像可直接被 `docker-compose.yml` 使用。后续日常重启只需 `docker compose up -d`。
+
+**3. 仅构建单个服务**：
+
+```bash
+# 仅推送服务
+docker compose -f docker-compose-build.yml build --no-cache trendradar
+docker compose -f docker-compose-build.yml up -d trendradar
+
+# 仅 MCP 服务
+docker compose -f docker-compose-build.yml build --no-cache trendradar-mcp
+docker compose -f docker-compose-build.yml up -d trendradar-mcp
+```
+
+**4. 代理构建（网络受限环境）**：
+
+如果构建时无法直接访问 GitHub 或 PyPI，在 `docker-compose-build.yml` 的 `build.args` 中配置代理：
+
+```yaml
+build:
+  context: ..
+  dockerfile: docker/Dockerfile
+  args:
+    - HTTP_PROXY=http://your-proxy:port
+    - HTTPS_PROXY=http://your-proxy:port
+```
+
+然后正常执行 `docker compose -f docker-compose-build.yml build --no-cache`。
+
+> 💡 **修改代码后更新**：修改 `trendradar/` 下源码后，重新构建并重启即可：
+> ```bash
+> docker compose -f docker-compose-build.yml build --no-cache trendradar
+> docker compose down && docker compose up -d
+> ```
+>
+> 仅修改 `config/` 或 `docker/.env` 不需要重新构建，重启容器即生效。
 
 #### 镜像更新
 
