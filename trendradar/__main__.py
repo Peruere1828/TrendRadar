@@ -1110,10 +1110,18 @@ class NewsAnalyzer:
         try:
             from trendradar.crawler.rss import RSSFetcher, RSSFeedConfig
 
-            # 构建 RSS 源配置
-            feeds = []
+            # 分离 人民网 sitemap 源和普通 RSS 源
+            sitemap_feeds = []
+            rss_feeds_configs = []
             for feed_config in rss_feeds:
-                # 读取并验证单个 feed 的 max_age_days（可选）
+                if feed_config.get("sitemap_url"):
+                    sitemap_feeds.append(feed_config)
+                else:
+                    rss_feeds_configs.append(feed_config)
+
+            # 构建普通 RSS 源配置
+            feeds = []
+            for feed_config in rss_feeds_configs:
                 max_age_days_raw = feed_config.get("max_age_days")
                 max_age_days = None
                 if max_age_days_raw is not None:
@@ -1134,22 +1142,19 @@ class NewsAnalyzer:
                     url=feed_config.get("url", ""),
                     max_items=feed_config.get("max_items", 50),
                     enabled=feed_config.get("enabled", True),
-                    max_age_days=max_age_days,  # None=使用全局，0=禁用，>0=覆盖
+                    max_age_days=max_age_days,
                 )
                 if feed.id and feed.url and feed.enabled:
                     feeds.append(feed)
 
-            if not feeds:
+            if not feeds and not sitemap_feeds:
                 print("[RSS] 没有启用的 RSS 源")
                 return None, None, None, set()
 
-            # 创建抓取器
+            # 创建 RSS 抓取器
             rss_config = self.ctx.rss_config
-            # RSS 代理：优先使用 RSS 专属代理，否则使用爬虫默认代理
             rss_proxy_url = rss_config.get("PROXY_URL", "") or self.proxy_url or ""
-            # 获取配置的时区
             timezone = self.ctx.config.get("TIMEZONE", DEFAULT_TIMEZONE)
-            # 获取新鲜度过滤配置
             freshness_config = rss_config.get("FRESHNESS_FILTER", {})
             freshness_enabled = freshness_config.get("ENABLED", True)
             default_max_age_days = freshness_config.get("MAX_AGE_DAYS", 3)
@@ -1163,17 +1168,44 @@ class NewsAnalyzer:
                 timezone=timezone,
                 freshness_enabled=freshness_enabled,
                 default_max_age_days=default_max_age_days,
-            )
+            ) if feeds else None
 
-            # 抓取数据
-            rss_data = fetcher.fetch_all()
+            # 抓取普通 RSS 数据
+            rss_data = fetcher.fetch_all() if fetcher else None
+
+            # 抓取人民网 sitemap 数据
+            people_data = None
+            if sitemap_feeds:
+                try:
+                    from trendradar.crawler.people_cn import PeopleCrawler
+                    people_ids = [f["id"] for f in sitemap_feeds]
+                    crawler = PeopleCrawler(max_items=20)
+                    people_data = crawler.fetch_all(people_ids)
+                    print(f"[人民网] 抓取完成: {people_data.get_total_count()} 条")
+                except Exception as e:
+                    print(f"[人民网] 抓取失败: {e}")
+
+            # 合并 RSS 和 人民网 数据
+            if rss_data is None and people_data is None:
+                print("[RSS] 所有源抓取失败")
+                return None, None, None, set()
+
+            merged_data = rss_data
+            if people_data:
+                if merged_data is None:
+                    merged_data = people_data
+                else:
+                    for feed_id, items in people_data.items.items():
+                        merged_data.items[feed_id] = items
+                    merged_data.id_to_name.update(people_data.id_to_name)
+                    merged_data.failed_ids.extend(people_data.failed_ids)
 
             # 保存到存储后端
-            if self.storage_manager.save_rss_data(rss_data):
+            if self.storage_manager.save_rss_data(merged_data):
                 print(f"[RSS] 数据已保存到存储后端")
 
                 # 处理 RSS 数据（按模式过滤）并返回用于合并推送
-                return self._process_rss_data_by_mode(rss_data)
+                return self._process_rss_data_by_mode(merged_data)
             else:
                 print(f"[RSS] 数据保存失败")
                 return None, None, None, set()
