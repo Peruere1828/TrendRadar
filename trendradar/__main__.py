@@ -2195,6 +2195,16 @@ def main():
         help="显示当前调度状态"
     )
     parser.add_argument(
+        "--single-watch",
+        action="store_true",
+        help="single-user URL watcher; uses WATCH_URL, WATCH_KEYWORDS, and email config"
+    )
+    parser.add_argument(
+        "--single-watch-loop",
+        action="store_true",
+        help="run single-user URL watcher forever; interval comes from CHECK_INTERVAL"
+    )
+    parser.add_argument(
         "--doctor",
         action="store_true",
         help="运行环境与配置体检"
@@ -2218,6 +2228,15 @@ def main():
 
         # 先加载配置
         config = load_config()
+
+        if args.single_watch or args.single_watch_loop:
+            from trendradar.single_watch import run_single_watch, run_single_watch_loop
+
+            if args.single_watch_loop:
+                run_single_watch_loop(config)
+            else:
+                run_single_watch(config)
+            return
 
         # 处理状态查看命令
         if args.show_schedule:
