@@ -325,7 +325,11 @@ class NotificationDispatcher:
             and self.config.get("EMAIL_PASSWORD")
             and self.config.get("EMAIL_TO")
         ):
-            results["email"] = self._send_email(report_type, html_file_path)
+            results["email"] = self._send_email(
+                report_type, html_file_path,
+                report_data=report_data,
+                rss_items=rss_items,
+            )
 
         return results
 
@@ -781,11 +785,16 @@ class NotificationDispatcher:
         self,
         report_type: str,
         html_file_path: Optional[str],
+        report_data: Optional[Dict] = None,
+        rss_items: Optional[List[Dict]] = None,
     ) -> bool:
-        """发送邮件（保持原有逻辑，已支持多收件人）
+        """发送邮件
 
-        Note:
-            AI 分析内容已在 HTML 生成时嵌入，无需在此传递
+        Args:
+            report_type: 报告类型
+            html_file_path: HTML 报告文件路径（report_data 为 None 时使用）
+            report_data: 报告数据（用于生成邮件专用 HTML）
+            rss_items: RSS 统计条目（可选）
         """
         return send_to_email(
             from_email=self.config["EMAIL_FROM"],
@@ -796,5 +805,7 @@ class NotificationDispatcher:
             custom_smtp_server=self.config.get("EMAIL_SMTP_SERVER", ""),
             custom_smtp_port=self.config.get("EMAIL_SMTP_PORT", ""),
             get_time_func=self.get_time_func,
+            report_data=report_data,
+            rss_items=rss_items,
         )
 

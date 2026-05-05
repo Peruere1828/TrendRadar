@@ -651,6 +651,7 @@ def count_rss_frequency(
                     "rank_threshold": rank_threshold,
                     "url": url,
                     "mobile_url": "",
+                    "summary": item.get("summary", ""),
                     "is_new": is_new,
                 }
                 word_stats[group_key]["titles"].append(title_data)

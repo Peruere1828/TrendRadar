@@ -24,10 +24,16 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.utils import formataddr, formatdate, make_msgid
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, List, Optional
 from urllib.parse import urlparse
 
 import requests
+
+from trendradar.notification.email_template import (
+    build_subject,
+    render_email_html,
+    render_email_plain_text,
+)
 
 from .batch import add_batch_headers, get_max_batch_header_size
 from .formatters import convert_markdown_to_mrkdwn, strip_markdown
@@ -624,6 +630,8 @@ def send_to_email(
     custom_smtp_port: Optional[int] = None,
     *,
     get_time_func: Callable = None,
+    report_data: Optional[Dict] = None,
+    rss_items: Optional[List[Dict]] = None,
 ) -> bool:
     """
     发送邮件通知
@@ -645,13 +653,18 @@ def send_to_email(
         AI 分析内容已在 HTML 生成时嵌入，无需再追加
     """
     try:
-        if not html_file_path or not Path(html_file_path).exists():
-            print(f"错误：HTML文件不存在或未提供: {html_file_path}")
-            return False
+        now = get_time_func() if get_time_func else datetime.now()
 
-        print(f"使用HTML文件: {html_file_path}")
-        with open(html_file_path, "r", encoding="utf-8") as f:
-            html_content = f.read()
+        if report_data is not None:
+            # 使用新的邮件模板生成 HTML
+            html_content = render_email_html(report_data, report_type, now, rss_items)
+        elif html_file_path and Path(html_file_path).exists():
+            print(f"使用HTML文件: {html_file_path}")
+            with open(html_file_path, "r", encoding="utf-8") as f:
+                html_content = f.read()
+        else:
+            print(f"错误：未提供 report_data 且 HTML 文件不存在: {html_file_path}")
+            return False
 
         domain = from_email.split("@")[-1].lower()
 
@@ -692,9 +705,11 @@ def send_to_email(
         else:
             msg["To"] = ", ".join(recipients)
 
-        # 设置邮件主题
-        now = get_time_func() if get_time_func else datetime.now()
-        subject = f"TrendRadar 热点分析报告 - {report_type} - {now.strftime('%m月%d日 %H:%M')}"
+        # 设置邮件主题（优先使用动态主题行）
+        if report_data is not None:
+            subject = build_subject(report_data, report_type, now)
+        else:
+            subject = f"TrendRadar 热点分析报告 - {report_type} - {now.strftime('%m月%d日 %H:%M')}"
         msg["Subject"] = Header(subject, "utf-8")
 
         # 设置其他标准 header
@@ -703,14 +718,17 @@ def send_to_email(
         msg["Message-ID"] = make_msgid()
 
         # 添加纯文本部分（作为备选）
-        text_content = f"""
+        if report_data is not None:
+            text_content = render_email_plain_text(report_data, report_type, now, rss_items)
+        else:
+            text_content = f"""
 TrendRadar 热点分析报告
 ========================
 报告类型：{report_type}
 生成时间：{now.strftime('%Y-%m-%d %H:%M:%S')}
 
 请使用支持HTML的邮件客户端查看完整报告内容。
-        """
+            """
         text_part = MIMEText(text_content, "plain", "utf-8")
         msg.attach(text_part)
 
