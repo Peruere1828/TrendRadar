@@ -24,6 +24,7 @@ from trendradar import __version__
 from trendradar.core import load_config, parse_multi_account_config, validate_paired_configs
 from trendradar.core.analyzer import convert_keyword_stats_to_platform_stats
 from trendradar.crawler import DataFetcher
+from trendradar.crawler.article_content import ArticleContentFetcher
 from trendradar.storage import convert_crawl_results_to_news_data
 from trendradar.utils.time import DEFAULT_TIMEZONE, is_within_days, calculate_days_old
 from trendradar.ai import AIAnalyzer, AIAnalysisResult
@@ -884,6 +885,11 @@ class NewsAnalyzer:
                     display_regions=display_regions,
                 )
 
+        # 正文抓取接入主流程：在 HTML 报告生成前为命中条目补充正文。
+        # 邮件发送使用同一个 HTML 文件，因此 cron/once 模式也能收到正文内容。
+        if self.ctx.config.get("ARTICLE_CONTENT", {}).get("ENABLED", False):
+            self._enrich_report_items_with_article_content(stats, rss_items)
+
         # HTML生成（如果启用）— 使用翻译后的数据
         html_file = None
         if self.ctx.config["STORAGE"]["FORMATS"]["HTML"]:
@@ -903,6 +909,84 @@ class NewsAnalyzer:
             )
 
         return stats, html_file, ai_result, rss_items
+
+    def _enrich_report_items_with_article_content(
+        self,
+        stats: Optional[List[Dict]],
+        rss_items: Optional[List[Dict]],
+    ) -> None:
+        """为主流程报告条目抓取文章正文。
+
+        这个方法只改写传入的报告数据，不改变抓取、去重、关键词统计等主流程。
+        """
+        content_config = self.ctx.config.get("ARTICLE_CONTENT", {})
+        max_articles = int(content_config.get("MAX_ARTICLES", 10) or 0)
+        if max_articles == 0:
+            print("[正文抓取] ARTICLE_CONTENT_MAX_ARTICLES=0，跳过正文抓取")
+            return
+
+        include_hotlist = content_config.get("INCLUDE_HOTLIST", True)
+        include_rss = content_config.get("INCLUDE_RSS", True)
+        only_new = content_config.get("ONLY_NEW", True)
+
+        candidates = []
+        seen_urls = set()
+
+        def add_candidate(title_data: Dict, source_type: str) -> None:
+            if only_new and not title_data.get("is_new", False):
+                return
+            url = (
+                title_data.get("mobile_url")
+                or title_data.get("mobileUrl")
+                or title_data.get("url")
+                or ""
+            )
+            if not url or not url.startswith(("http://", "https://")):
+                return
+            if url in seen_urls:
+                return
+            seen_urls.add(url)
+            candidates.append((title_data, source_type, url))
+
+        if include_hotlist and stats:
+            for stat in stats:
+                for title_data in stat.get("titles", []):
+                    add_candidate(title_data, "hotlist")
+
+        if include_rss and rss_items:
+            for stat in rss_items:
+                for title_data in stat.get("titles", []):
+                    add_candidate(title_data, "rss")
+
+        if max_articles > 0:
+            candidates = candidates[:max_articles]
+
+        if not candidates:
+            print("[正文抓取] 没有符合条件的文章需要抓取")
+            return
+
+        fetcher = ArticleContentFetcher(
+            jina_api_key=content_config.get("JINA_API_KEY", ""),
+            timeout=int(content_config.get("TIMEOUT", 30) or 30),
+            min_interval=float(content_config.get("MIN_INTERVAL", 1.0) or 1.0),
+            max_chars=int(content_config.get("MAX_CHARS", 4000) or 4000),
+            use_jina=content_config.get("USE_JINA", True),
+        )
+
+        print(
+            f"[正文抓取] 开始抓取 {len(candidates)} 篇文章"
+            f"（only_new={only_new}, hotlist={include_hotlist}, rss={include_rss}）"
+        )
+        for index, (title_data, source_type, url) in enumerate(candidates, 1):
+            title = title_data.get("title", "")
+            result = fetcher.fetch(url, title)
+            if result.success and result.content:
+                title_data["article_content"] = result.content
+                title_data["article_content_source"] = result.source
+                print(f"[正文抓取] {index}/{len(candidates)} 成功 [{source_type}] {title[:60]}")
+            else:
+                title_data["article_content_error"] = result.error or "unknown error"
+                print(f"[正文抓取] {index}/{len(candidates)} 失败 [{source_type}] {title[:60]}: {title_data['article_content_error']}")
 
     def _send_notification_if_needed(
         self,

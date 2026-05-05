@@ -399,7 +399,26 @@ storage:
 
 
 # ===============================================================
-# 8. AI 模型配置（共享）
+# 8. 文章正文抓取
+#
+# 开启后，主流程（cron/once）会在生成 HTML 报告前抓取命中文章正文。
+# 邮件通知使用同一个 HTML 文件，因此邮件里也会包含正文摘录。
+# ===============================================================
+article_content:
+  enabled: false                      # 是否启用正文抓取（也可用 ARTICLE_CONTENT_ENABLED=true 覆盖）
+  include_hotlist: true               # 是否抓取热榜命中文章
+  include_rss: true                   # 是否抓取 RSS 命中文章
+  only_new: true                      # true=只抓本轮新增命中文章；false=抓报告中的命中文章
+  max_articles: 10                    # 每次最多抓取文章数，避免运行时间过长
+  max_chars: 4000                     # 每篇正文最多保留字符数
+  timeout: 30                         # 单篇文章请求超时（秒）
+  min_interval: 1.0                   # 两次正文请求之间的最小间隔（秒）
+  use_jina: true                      # 优先使用 Jina Reader 抽取正文，失败后回退到本地 HTML 解析
+  jina_api_key: ""                    # 可选；也可通过 JINA_API_KEY 环境变量配置
+
+
+# ===============================================================
+# 9. AI 模型配置（共享）
 #
 # ai_analysis / ai_translation / ai_filter 共用此模型配置
 # 基于 LiteLLM 统一接口，支持 100+ AI 提供商

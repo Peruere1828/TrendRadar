@@ -453,6 +453,25 @@ def render_html_content(
                 color: #7c3aed;
             }
 
+            .article-content-box {
+                margin-top: 10px;
+                padding: 12px;
+                background: #f8fafc;
+                border: 1px solid #e5e7eb;
+                border-radius: 6px;
+                color: #374151;
+                font-size: 13px;
+                line-height: 1.7;
+                white-space: pre-wrap;
+            }
+
+            .article-content-meta {
+                margin-bottom: 6px;
+                color: #6b7280;
+                font-size: 12px;
+                font-weight: 600;
+            }
+
             /* 通用区域分割线样式 */
             .section-divider {
                 margin-top: 32px;
@@ -1438,6 +1457,21 @@ def render_html_content(
                 else:
                     stats_html += escaped_title
 
+                article_content = title_data.get("article_content", "")
+                article_source = title_data.get("article_content_source", "")
+                article_error = title_data.get("article_content_error", "")
+                if article_content:
+                    meta = f"正文来源：{article_source}" if article_source else "正文内容"
+                    stats_html += f"""
+                            <div class="article-content-box">
+                                <div class="article-content-meta">{html_escape(meta)}</div>{html_escape(article_content)}
+                            </div>"""
+                elif article_error:
+                    stats_html += f"""
+                            <div class="article-content-box">
+                                <div class="article-content-meta">正文抓取失败</div>{html_escape(article_error)}
+                            </div>"""
+
                 stats_html += """
                             </div>
                         </div>
@@ -1504,6 +1538,21 @@ def render_html_content(
                     new_titles_html += f'<a href="{escaped_url}" target="_blank" class="news-link">{escaped_title}</a>'
                 else:
                     new_titles_html += escaped_title
+
+                article_content = title_data.get("article_content", "")
+                article_source = title_data.get("article_content_source", "")
+                article_error = title_data.get("article_content_error", "")
+                if article_content:
+                    meta = f"正文来源：{article_source}" if article_source else "正文内容"
+                    new_titles_html += f"""
+                                    <div class="article-content-box">
+                                        <div class="article-content-meta">{html_escape(meta)}</div>{html_escape(article_content)}
+                                    </div>"""
+                elif article_error:
+                    new_titles_html += f"""
+                                    <div class="article-content-box">
+                                        <div class="article-content-meta">正文抓取失败</div>{html_escape(article_error)}
+                                    </div>"""
 
                 new_titles_html += """
                                 </div>
@@ -1605,6 +1654,21 @@ def render_html_content(
                     rss_html += f'<a href="{escaped_url}" target="_blank" class="rss-link">{escaped_title}</a>'
                 else:
                     rss_html += escaped_title
+
+                article_content = title_data.get("article_content", "")
+                article_source = title_data.get("article_content_source", "")
+                article_error = title_data.get("article_content_error", "")
+                if article_content:
+                    meta = f"正文来源：{article_source}" if article_source else "正文内容"
+                    rss_html += f"""
+                                <div class="article-content-box">
+                                    <div class="article-content-meta">{html_escape(meta)}</div>{html_escape(article_content)}
+                                </div>"""
+                elif article_error:
+                    rss_html += f"""
+                                <div class="article-content-box">
+                                    <div class="article-content-meta">正文抓取失败</div>{html_escape(article_error)}
+                                </div>"""
 
                 rss_html += """
                             </div>

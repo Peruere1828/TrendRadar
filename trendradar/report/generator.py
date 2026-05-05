@@ -89,6 +89,12 @@ def prepare_report_data(
                         "mobile_url": mobile_url,
                         "is_new": True,
                     }
+                    if title_data.get("article_content"):
+                        processed_title["article_content"] = title_data.get("article_content")
+                    if title_data.get("article_content_source"):
+                        processed_title["article_content_source"] = title_data.get("article_content_source")
+                    if title_data.get("article_content_error"):
+                        processed_title["article_content_error"] = title_data.get("article_content_error")
                     source_titles.append(processed_title)
 
                 if source_titles:
@@ -118,6 +124,12 @@ def prepare_report_data(
                 "mobile_url": title_data.get("mobileUrl", ""),
                 "is_new": title_data.get("is_new", False),
             }
+            if title_data.get("article_content"):
+                processed_title["article_content"] = title_data.get("article_content")
+            if title_data.get("article_content_source"):
+                processed_title["article_content_source"] = title_data.get("article_content_source")
+            if title_data.get("article_content_error"):
+                processed_title["article_content_error"] = title_data.get("article_content_error")
             processed_titles.append(processed_title)
 
         processed_stats.append(
