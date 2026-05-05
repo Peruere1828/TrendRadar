@@ -1,0 +1,42 @@
+services:
+  trendradar-watch:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: wantcat/trendradar:latest
+    container_name: trendradar-watch
+    restart: unless-stopped
+
+    ports:
+      - "127.0.0.1:${WEBSERVER_PORT:-8080}:${WEBSERVER_PORT:-8080}"
+
+    volumes:
+      - ../output:/app/output
+
+    environment:
+      # Container mode
+      - RUN_MODE=single-watch
+      - TZ=${TZ:-Asia/Shanghai}
+      - TIMEZONE=${TIMEZONE:-Asia/Shanghai}
+      - WEBSERVER_PORT=${WEBSERVER_PORT:-8080}
+      - SINGLE_WATCH_CONFIG_FILE=/app/output/single_watch/config.json
+
+      # Watch target
+      - WATCH_URL=${WATCH_URL:-}
+      - WATCH_KEYWORDS=${WATCH_KEYWORDS:-}
+      - WATCH_SOURCE_NAME=${WATCH_SOURCE_NAME:-Watch Source}
+      - CHECK_INTERVAL=${CHECK_INTERVAL:-1800}
+      - WATCH_MAX_ITEMS=${WATCH_MAX_ITEMS:-30}
+      - WATCH_MAX_CONTENT_CHARS=${WATCH_MAX_CONTENT_CHARS:-8000}
+      - WATCH_NOTIFY_ON_FIRST_RUN=${WATCH_NOTIFY_ON_FIRST_RUN:-true}
+
+      # Article content extraction
+      - WATCH_USE_JINA=${WATCH_USE_JINA:-true}
+      - JINA_API_KEY=${JINA_API_KEY:-}
+
+      # Email notification
+      - EMAIL_FROM=${EMAIL_FROM}
+      - EMAIL_PASSWORD=${EMAIL_PASSWORD}
+      - EMAIL_TO=${EMAIL_TO:-}
+      - EMAIL_SMTP_SERVER=${EMAIL_SMTP_SERVER:-}
+      - EMAIL_SMTP_PORT=${EMAIL_SMTP_PORT:-}

@@ -2227,16 +2227,16 @@ def main():
             return
 
         # 先加载配置
-        config = load_config()
-
         if args.single_watch or args.single_watch_loop:
             from trendradar.single_watch import run_single_watch, run_single_watch_loop
 
             if args.single_watch_loop:
-                run_single_watch_loop(config)
+                run_single_watch_loop()
             else:
-                run_single_watch(config)
+                run_single_watch()
             return
+
+        config = load_config()
 
         # 处理状态查看命令
         if args.show_schedule:

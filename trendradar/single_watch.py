@@ -63,17 +63,21 @@ class SingleWatchConfig:
     jina_api_key: str = ""
     timeout: int = 30
     check_interval: int = 1800
+    config_file: str = ""
 
 
 def load_single_watch_config(base_config: Optional[Dict] = None) -> SingleWatchConfig:
     base_config = base_config or {}
 
-    watch_url = _env("WATCH_URL")
-    keywords = _split_keywords(_env("WATCH_KEYWORDS") or _env("WATCH_TOPIC"))
+    data_dir = _env("STORAGE_DATA_DIR") or base_config.get("STORAGE", {}).get("LOCAL", {}).get("DATA_DIR", "output")
+    config_file = _env("SINGLE_WATCH_CONFIG_FILE") or str(Path(data_dir) / "single_watch" / "config.json")
+    saved_config = _load_saved_config(config_file)
+
+    watch_url = _config_str("WATCH_URL", saved_config, "watch_url")
+    keywords = _split_keywords(_config_str("WATCH_KEYWORDS", saved_config, "keywords") or _env("WATCH_TOPIC"))
     email_from = _env("EMAIL_FROM") or base_config.get("EMAIL_FROM", "")
     email_password = _env("EMAIL_PASSWORD") or base_config.get("EMAIL_PASSWORD", "")
-    email_to = _env("EMAIL_TO") or base_config.get("EMAIL_TO", "")
-    data_dir = _env("STORAGE_DATA_DIR") or base_config.get("STORAGE", {}).get("LOCAL", {}).get("DATA_DIR", "output")
+    email_to = _config_str("EMAIL_TO", saved_config, "email_to") or base_config.get("EMAIL_TO", "")
     timezone = _env("TIMEZONE") or base_config.get("TIMEZONE", DEFAULT_TIMEZONE)
 
     return SingleWatchConfig(
@@ -84,17 +88,18 @@ def load_single_watch_config(base_config: Optional[Dict] = None) -> SingleWatchC
         email_to=email_to,
         smtp_server=_env("EMAIL_SMTP_SERVER") or base_config.get("EMAIL_SMTP_SERVER", ""),
         smtp_port=_env("EMAIL_SMTP_PORT") or base_config.get("EMAIL_SMTP_PORT", ""),
-        source_name=_env("WATCH_SOURCE_NAME") or "Watch Source",
+        source_name=_config_str("WATCH_SOURCE_NAME", saved_config, "source_name") or "Watch Source",
         data_dir=data_dir,
         state_file=_env("WATCH_STATE_FILE") or str(Path(data_dir) / "single_watch" / "state.json"),
         timezone=timezone,
-        max_items=_env_int("WATCH_MAX_ITEMS", 30),
-        max_content_chars=_env_int("WATCH_MAX_CONTENT_CHARS", 8000),
-        notify_on_first_run=_env_bool("WATCH_NOTIFY_ON_FIRST_RUN", True),
-        use_jina=_env_bool("WATCH_USE_JINA", True),
+        max_items=_config_int("WATCH_MAX_ITEMS", saved_config, "max_items", 30),
+        max_content_chars=_config_int("WATCH_MAX_CONTENT_CHARS", saved_config, "max_content_chars", 8000),
+        notify_on_first_run=_config_bool("WATCH_NOTIFY_ON_FIRST_RUN", saved_config, "notify_on_first_run", True),
+        use_jina=_config_bool("WATCH_USE_JINA", saved_config, "use_jina", True),
         jina_api_key=_env("JINA_API_KEY"),
-        timeout=_env_int("WATCH_TIMEOUT", 30),
-        check_interval=_env_int("CHECK_INTERVAL", _env_int("WATCH_CHECK_INTERVAL", 1800)),
+        timeout=_config_int("WATCH_TIMEOUT", saved_config, "timeout", 30),
+        check_interval=_config_int("CHECK_INTERVAL", saved_config, "check_interval", _env_int("WATCH_CHECK_INTERVAL", 1800)),
+        config_file=config_file,
     )
 
 
@@ -377,9 +382,9 @@ def run_single_watch(base_config: Optional[Dict] = None) -> bool:
 
 
 def run_single_watch_loop(base_config: Optional[Dict] = None) -> None:
-    config = load_single_watch_config(base_config)
-    watcher = SingleWatcher(config)
     while True:
+        config = load_single_watch_config(base_config)
+        watcher = SingleWatcher(config)
         try:
             watcher.run_once()
         except Exception as e:
@@ -407,6 +412,51 @@ def _env_bool(name: str, default: bool) -> bool:
     if not value:
         return default
     return value in {"1", "true", "yes", "on"}
+
+
+def _load_saved_config(path: str) -> Dict:
+    config_path = Path(path)
+    if not config_path.exists():
+        return {}
+    try:
+        data = json.loads(config_path.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except Exception as e:
+        print(f"[single-watch] Failed to load form config {path}: {e}")
+        return {}
+
+
+def _config_str(env_name: str, saved_config: Dict, saved_key: str) -> str:
+    env_value = _env(env_name)
+    if env_value:
+        return env_value
+    value = saved_config.get(saved_key, "")
+    if isinstance(value, list):
+        return ",".join(str(item) for item in value)
+    return str(value).strip() if value is not None else ""
+
+
+def _config_int(env_name: str, saved_config: Dict, saved_key: str, default: int) -> int:
+    env_value = _env(env_name)
+    if env_value:
+        return _env_int(env_name, default)
+    value = saved_config.get(saved_key)
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _config_bool(env_name: str, saved_config: Dict, saved_key: str, default: bool) -> bool:
+    env_value = _env(env_name)
+    if env_value:
+        return _env_bool(env_name, default)
+    value = saved_config.get(saved_key)
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return default
 
 
 def _split_keywords(value: str) -> List[str]:

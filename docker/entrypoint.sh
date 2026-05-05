@@ -2,12 +2,22 @@
 set -e
 
 # 检查配置文件
-if [ ! -f "/app/config/config.yaml" ] || [ ! -f "/app/config/frequency_words.txt" ]; then
+if [ "${RUN_MODE:-cron}" != "single-watch" ] && [ "${RUN_MODE:-cron}" != "single-watch-once" ] && { [ ! -f "/app/config/config.yaml" ] || [ ! -f "/app/config/frequency_words.txt" ]; }; then
     echo "❌ 配置文件缺失"
     exit 1
 fi
 
 case "${RUN_MODE:-cron}" in
+"single-watch")
+    echo "Starting single-watch mode"
+    python manage.py start_webserver
+    exec python -m trendradar --single-watch-loop
+    ;;
+"single-watch-once")
+    echo "Running single-watch once"
+    python manage.py start_webserver
+    exec python -m trendradar --single-watch
+    ;;
 "once")
     echo "🔄 单次执行"
     exec python -m trendradar
