@@ -436,6 +436,7 @@ def _ai_extract_tags(content: str) -> dict:
         parts = prompt_template.split("[user]")
         system_prompt = parts[0].replace("[system]", "").strip()
         user_prompt = parts[1].strip() if len(parts) > 1 else content
+        user_prompt = user_prompt.replace("{interests_content}", content)
 
     try:
         import litellm
@@ -483,14 +484,15 @@ def _ai_classify_news(content: str, tags: list, sample_size: int = 8) -> dict:
     )
     classify_prompt = (
         f"User interest tags:\n{tags_text}\n\n"
-        f"Below are {len(recent_news)} news headlines. Match news to tag \"{tags[0]['tag']}\".\n"
+        f"Below are {len(recent_news)} news headlines. "
+        f"Match each news item to the most relevant tag(s) above.\n"
         f"Score each match 0.0-1.0. Only return items with score >= 0.5. Max {sample_size} results.\n\n"
         f"News:\n"
     )
     for i, news in enumerate(recent_news):
         classify_prompt += f"{i + 1}. [{news.get('source', '')}] {news['title']}\n"
 
-    classify_prompt += '\nReturn JSON: {"results": [{"title": "...", "score": 0.9, "source": "..."}]}'
+    classify_prompt += '\nReturn JSON: {"results": [{"title": "...", "score": 0.9, "source": "...", "tag": "matched tag name"}]}'
 
     try:
         import litellm
