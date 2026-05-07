@@ -50,6 +50,17 @@ def _get_env_str(key: str, default: str = "") -> str:
     return os.environ.get(key, "").strip() or default
 
 
+def _get_env_float(key: str, default: float = 0.0) -> float:
+    """从环境变量获取浮点数"""
+    value = os.environ.get(key, "").strip()
+    if not value:
+        return default
+    try:
+        return float(value)
+    except ValueError:
+        return default
+
+
 def _load_app_config(config_data: Dict) -> Dict:
     """加载应用配置"""
     app_config = config_data.get("app", {})
@@ -397,6 +408,38 @@ def _load_storage_config(config_data: Dict) -> Dict:
     }
 
 
+def _load_article_content_config(config_data: Dict) -> Dict:
+    """加载文章正文抓取配置"""
+    article_content = config_data.get("article_content", {})
+
+    enabled_env = _get_env_bool("ARTICLE_CONTENT_ENABLED")
+    include_hotlist_env = _get_env_bool("ARTICLE_CONTENT_INCLUDE_HOTLIST")
+    include_rss_env = _get_env_bool("ARTICLE_CONTENT_INCLUDE_RSS")
+    only_new_env = _get_env_bool("ARTICLE_CONTENT_ONLY_NEW")
+    use_jina_env = _get_env_bool("ARTICLE_CONTENT_USE_JINA")
+
+    return {
+        "ENABLED": enabled_env if enabled_env is not None else article_content.get("enabled", False),
+        "INCLUDE_HOTLIST": include_hotlist_env if include_hotlist_env is not None else article_content.get("include_hotlist", True),
+        "INCLUDE_RSS": include_rss_env if include_rss_env is not None else article_content.get("include_rss", True),
+        "ONLY_NEW": only_new_env if only_new_env is not None else article_content.get("only_new", True),
+        "MAX_ARTICLES": (
+            _get_env_int_or_none("ARTICLE_CONTENT_MAX_ARTICLES")
+            if _get_env_int_or_none("ARTICLE_CONTENT_MAX_ARTICLES") is not None
+            else article_content.get("max_articles", 10)
+        ),
+        "MAX_CHARS": (
+            _get_env_int_or_none("ARTICLE_CONTENT_MAX_CHARS")
+            if _get_env_int_or_none("ARTICLE_CONTENT_MAX_CHARS") is not None
+            else article_content.get("max_chars", 4000)
+        ),
+        "TIMEOUT": _get_env_int("ARTICLE_CONTENT_TIMEOUT") or article_content.get("timeout", 30),
+        "MIN_INTERVAL": _get_env_float("ARTICLE_CONTENT_MIN_INTERVAL", article_content.get("min_interval", 1.0)),
+        "USE_JINA": use_jina_env if use_jina_env is not None else article_content.get("use_jina", True),
+        "JINA_API_KEY": _get_env_str("JINA_API_KEY") or article_content.get("jina_api_key", ""),
+    }
+
+
 def _load_webhook_config(config_data: Dict) -> Dict:
     """加载 Webhook 配置"""
     notification = config_data.get("notification", {})
@@ -601,6 +644,9 @@ def load_config(config_path: Optional[str] = None) -> Dict[str, Any]:
 
     # 存储配置
     config["STORAGE"] = _load_storage_config(config_data)
+
+    # 文章正文抓取配置
+    config["ARTICLE_CONTENT"] = _load_article_content_config(config_data)
 
     # Webhook 配置
     config.update(_load_webhook_config(config_data))
