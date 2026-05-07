@@ -2,6 +2,14 @@ FROM python:3.12-slim-bookworm
 
 WORKDIR /app
 
+# Proxy support — pass via build args when behind a proxy
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY=localhost,127.0.0.1
+ENV HTTP_PROXY=${HTTP_PROXY} \
+    HTTPS_PROXY=${HTTPS_PROXY} \
+    NO_PROXY=${NO_PROXY}
+
 # Latest releases available at https://github.com/aptible/supercronic/releases
 ARG TARGETARCH
 ENV SUPERCRONIC_VERSION=v0.2.39

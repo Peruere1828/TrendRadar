@@ -78,6 +78,11 @@ platforms:
     - id: "zhihu"
       name: "知乎"
 
+    # 新增平台 (NewsNow 源)
+    - id: "ithome"
+      name: "IT之家"
+    - id: "gelonghui"
+      name: "格隆汇"
 
 
 # ===============================================================
@@ -126,6 +131,20 @@ rss:
     - id: "yahoo-finance"
       name: "雅虎财经"
       url: "https://finance.yahoo.com/news/rssindex"
+
+    # 人民网 RSS 源（通过 sitemap 抓取，RSS 已废弃）
+    - id: "people-politics"
+      name: "人民网·时政"
+      sitemap_url: "http://www.people.cn/sitemap/cn/politics/news_sitemap.xml"
+      max_age_days: 1
+    - id: "people-finance"
+      name: "人民网·财经"
+      sitemap_url: "http://www.people.cn/sitemap/cn/finance/news_sitemap.xml"
+      max_age_days: 1
+    - id: "people-scitech"
+      name: "人民网·科技"
+      sitemap_url: "http://www.people.cn/sitemap/cn/scitech/news_sitemap.xml"
+      max_age_days: 1
 
     # 自定义源示例
     # - id: "custom-feed"
@@ -279,7 +298,7 @@ display:
   # 两者共享此处的平台/RSS 配置，但开关互相独立（可只开 AI 分析、不推送展示）
   standalone:
     platforms: ["zhihu", "wallstreetcn-hot"]     # 热榜平台 ID 列表（如 ["zhihu", "weibo"]）
-    rss_feeds: []                     # RSS 源 ID 列表（如 ["hacker-news"]）
+    rss_feeds: ["people-politics", "people-finance", "people-scitech"]     # 人民网独立展示
     max_items: 20                     # 每个源最多展示条数（0=不限制）
 
 

@@ -130,6 +130,9 @@ def prepare_report_data(
                 processed_title["article_content_source"] = title_data.get("article_content_source")
             if title_data.get("article_content_error"):
                 processed_title["article_content_error"] = title_data.get("article_content_error")
+            summary = title_data.get("summary", "")
+            if summary:
+                processed_title["summary"] = summary
             processed_titles.append(processed_title)
 
         processed_stats.append(

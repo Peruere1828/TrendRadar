@@ -93,6 +93,28 @@ def render_email_html(
 # ═══════════════════════════════════════════════════════════════════
 
 
+def _clean_article_summary(text: str, title: str = "", max_chars: int = 200) -> str:
+    """将文章正文或 RSS 摘要清理为邮件中可用的简短概述"""
+    if not text:
+        return ""
+    lines = text.strip().split("\n")
+    cleaned = []
+    title_clean = title.strip().lower()
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if stripped.lower() == title_clean:
+            continue
+        if any(stripped.startswith(p) for p in ("首页", "Home", "导航", "当前位置")):
+            continue
+        if ">" in stripped and len(stripped) < 40:
+            continue
+        cleaned.append(stripped)
+    result = " ".join(cleaned)
+    return result[:max_chars]
+
+
 def _extract_top_picks(stats: List[Dict], max_picks: int = 5) -> List[Dict]:
     """从各主题中提取排名最高的条目作为 Top Picks"""
     candidates = []
@@ -101,16 +123,20 @@ def _extract_top_picks(stats: List[Dict], max_picks: int = 5) -> List[Dict]:
         for title_data in stat.get("titles", []):
             ranks = title_data.get("ranks", [])
             min_rank = min(ranks) if ranks else 99
+            ac = title_data.get("article_content", "")
+            sm = title_data.get("summary", "")
+            raw_summary = ac or sm
+            clean_summary = _clean_article_summary(raw_summary, title_data.get("title", ""))
             candidates.append({
                 "keyword": keyword,
                 "title": title_data["title"],
                 "source_name": title_data.get("source_name", ""),
-                "url": title_data.get("mobile_url") or title_data.get("url", ""),
+                "url": title_data.get("mobile_url") or title_data.get("mobileUrl") or title_data.get("url", ""),
                 "ranks": ranks,
                 "min_rank": min_rank,
                 "time_display": title_data.get("time_display", ""),
                 "count": title_data.get("count", 1),
-                "summary": title_data.get("summary", ""),
+                "summary": clean_summary,
                 "is_new": title_data.get("is_new", False),
             })
 
@@ -282,12 +308,12 @@ def _render_stats_sections(stats: List[Dict]) -> str:
                 if is_new
                 else ""
             )
-            summary = td.get("summary", "")
+            summary = _clean_article_summary(td.get("article_content") or td.get("summary", ""), td.get("title", ""), 150)
             summary_line = ""
             if summary:
                 summary_line = (
                     f'<div style="font-size:12px;color:#9ca3af;line-height:1.4;margin-top:2px;">'
-                    f'{html_escape(summary[:150])}'
+                    f'{html_escape(summary)}'
                     f'</div>'
                 )
 
@@ -405,7 +431,7 @@ def _render_rss_sections(
             source = html_escape(td.get("source_name", ""))
             url = td.get("url", "")
             time_display = td.get("time_display", "")
-            summary = td.get("summary", "")
+            summary = _clean_article_summary(td.get("article_content") or td.get("summary", ""), td.get("title", ""), 150)
             is_new = td.get("is_new", False)
             new_mark = (
                 ' <span style="color:#dc2626;font-size:10px;font-weight:700;">NEW</span>'
@@ -518,7 +544,7 @@ def render_email_plain_text(
                     lines.append(f"       {source}{rank_str}")
                 if url:
                     lines.append(f"       {url}")
-                summary = td.get("summary", "")
+                summary = _clean_article_summary(td.get("article_content") or td.get("summary", ""), td.get("title", ""), 150)
                 if summary:
                     lines.append(f"       {summary[:200]}")
 
@@ -532,7 +558,7 @@ def render_email_plain_text(
                 lines.append(f"    · {td['title']}{time_str}")
                 if td.get("url"):
                     lines.append(f"      {td['url']}")
-                summary = td.get("summary", "")
+                summary = _clean_article_summary(td.get("article_content") or td.get("summary", ""), td.get("title", ""), 150)
                 if summary:
                     lines.append(f"      {summary[:200]}")
 

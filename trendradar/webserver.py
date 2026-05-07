@@ -35,7 +35,7 @@ if str(APP_DIR) not in sys.path:
     sys.path.insert(0, str(APP_DIR))
 
 # ---- AI Config from env ----
-AI_MODEL = os.environ.get("AI_MODEL", "openai/deepseek-v4")
+AI_MODEL = os.environ.get("AI_MODEL_WEBSERVER", os.environ.get("AI_MODEL", "openai/deepseek-v4"))
 AI_API_KEY = os.environ.get("AI_API_KEY", "")
 AI_API_BASE = os.environ.get("AI_API_BASE", "")
 AI_TIMEOUT = int(os.environ.get("AI_TIMEOUT", "120"))

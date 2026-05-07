@@ -355,6 +355,7 @@ def count_word_frequency(
                         "rank_threshold": rank_threshold,
                         "url": url,
                         "mobileUrl": mobile_url,
+                        "summary": "",
                         "is_new": is_new,
                         "rank_timeline": rank_timeline,
                     }
