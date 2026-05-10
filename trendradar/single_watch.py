@@ -21,6 +21,7 @@ from urllib.parse import urljoin, urlparse
 
 import requests
 
+from trendradar.ai.client import AIClient
 from trendradar.crawler.article_content import ArticleContentFetcher
 from trendradar.crawler.people_cn import PeopleCrawler
 from trendradar.crawler.rss import RSSFeedConfig, RSSFetcher
@@ -64,6 +65,10 @@ class SingleWatchConfig:
     timeout: int = 30
     check_interval: int = 1800
     config_file: str = ""
+    ai_summary_enabled: bool = True
+    ai_summary_max_input_chars: int = 6000
+    ai_summary_max_tokens: int = 700
+    ai_config: Optional[Dict] = None
 
 
 def load_single_watch_config(base_config: Optional[Dict] = None) -> SingleWatchConfig:
@@ -79,6 +84,7 @@ def load_single_watch_config(base_config: Optional[Dict] = None) -> SingleWatchC
     email_password = _env("EMAIL_PASSWORD") or base_config.get("EMAIL_PASSWORD", "")
     email_to = _config_str("EMAIL_TO", saved_config, "email_to") or base_config.get("EMAIL_TO", "")
     timezone = _env("TIMEZONE") or base_config.get("TIMEZONE", DEFAULT_TIMEZONE)
+    base_ai_config = base_config.get("AI", {})
 
     return SingleWatchConfig(
         watch_url=watch_url,
@@ -100,6 +106,24 @@ def load_single_watch_config(base_config: Optional[Dict] = None) -> SingleWatchC
         timeout=_config_int("WATCH_TIMEOUT", saved_config, "timeout", 30),
         check_interval=_config_int("CHECK_INTERVAL", saved_config, "check_interval", _env_int("WATCH_CHECK_INTERVAL", 1800)),
         config_file=config_file,
+        ai_summary_enabled=_config_bool("WATCH_AI_SUMMARY_ENABLED", saved_config, "ai_summary_enabled", True),
+        ai_summary_max_input_chars=_config_int(
+            "WATCH_AI_SUMMARY_MAX_INPUT_CHARS",
+            saved_config,
+            "ai_summary_max_input_chars",
+            6000,
+        ),
+        ai_summary_max_tokens=_config_int("WATCH_AI_SUMMARY_MAX_TOKENS", saved_config, "ai_summary_max_tokens", 700),
+        ai_config={
+            "MODEL": _env("WATCH_AI_MODEL") or _env("AI_MODEL") or base_ai_config.get("MODEL", "deepseek/deepseek-chat"),
+            "API_KEY": _env("AI_API_KEY") or base_ai_config.get("API_KEY", ""),
+            "API_BASE": _env("AI_API_BASE") or base_ai_config.get("API_BASE", ""),
+            "TIMEOUT": _env_int("AI_TIMEOUT", base_ai_config.get("TIMEOUT", 120)),
+            "TEMPERATURE": float(_env("WATCH_AI_TEMPERATURE") or base_ai_config.get("TEMPERATURE", 0.2)),
+            "MAX_TOKENS": _env_int("WATCH_AI_SUMMARY_MAX_TOKENS", 700),
+            "NUM_RETRIES": base_ai_config.get("NUM_RETRIES", 2),
+            "FALLBACK_MODELS": base_ai_config.get("FALLBACK_MODELS", []),
+        },
     )
 
 
@@ -118,6 +142,7 @@ class SingleWatcher:
             max_chars=config.max_content_chars,
             use_jina=config.use_jina,
         )
+        self.ai_client = self._build_ai_client()
 
     def run_once(self) -> bool:
         self._validate_config()
@@ -224,15 +249,81 @@ class SingleWatcher:
         enriched = []
         for article in articles:
             content = self.content_fetcher.fetch(article.url, article.title)
+            article_content = content.content if content.success else ""
+            summary = self._summarize_article(article, article_content) if article_content else ""
             enriched.append({
                 "article": article,
-                "content": content.content if content.success else "",
+                "content": article_content,
+                "ai_summary": summary,
                 "content_error": content.error,
                 "content_source": content.source,
             })
             status = "ok" if content.success else f"failed: {content.error}"
+            if summary:
+                status += ", summarized"
             print(f"[single-watch] Content {status} - {article.title}")
         return enriched
+
+    def _build_ai_client(self) -> Optional[AIClient]:
+        if not self.config.ai_summary_enabled:
+            return None
+
+        ai_config = self.config.ai_config or {}
+        if not ai_config.get("API_KEY"):
+            print("[single-watch] AI summary skipped: AI_API_KEY not configured.")
+            return None
+
+        try:
+            client = AIClient(ai_config)
+            valid, message = client.validate_config()
+            if not valid:
+                print(f"[single-watch] AI summary skipped: {message}")
+                return None
+            return client
+        except Exception as e:
+            print(f"[single-watch] AI summary unavailable: {e}")
+            return None
+
+    def _summarize_article(self, article: WatchArticle, content: str) -> str:
+        if not self.ai_client:
+            return ""
+
+        max_chars = max(500, self.config.ai_summary_max_input_chars)
+        excerpt = content[:max_chars]
+        keywords = ", ".join(self.config.keywords) if self.config.keywords else "用户关注主题"
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "你是新闻监控助手。请只依据用户提供的文章正文做摘要，"
+                    "不要补充正文没有的信息。输出中文，简洁、可直接放入邮件。"
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"关注主题词：{keywords}\n"
+                    f"文章标题：{article.title}\n"
+                    f"文章链接：{article.url}\n\n"
+                    "请完成：\n"
+                    "1. 用 2-4 句话概括文章核心内容。\n"
+                    "2. 如果文章与关注主题词有关，说明关联点；如果关联较弱，也如实说明。\n"
+                    "3. 不要输出 Markdown 标题。\n\n"
+                    f"正文：\n{excerpt}"
+                ),
+            },
+        ]
+
+        try:
+            summary = self.ai_client.chat(
+                messages,
+                temperature=0.2,
+                max_tokens=self.config.ai_summary_max_tokens,
+            )
+            return summary.strip()
+        except Exception as e:
+            print(f"[single-watch] AI summary failed - {article.title}: {e}")
+            return ""
 
     def _matches_keywords(self, article: WatchArticle) -> bool:
         haystack = f"{article.title}\n{article.summary}".lower()
@@ -259,12 +350,23 @@ class SingleWatcher:
         for index, item in enumerate(enriched, 1):
             article = item["article"]
             content = item.get("content") or f"正文抓取失败：{item.get('content_error', 'unknown error')}"
+            ai_summary = item.get("ai_summary", "")
             parts.extend([
                 "<div class='article'>",
                 f"<h3>{index}. <a href='{html.escape(article.url)}'>{html.escape(article.title)}</a></h3>",
                 f"<p class='meta'>来源：{html.escape(article.source_name or self.config.source_name)}"
                 f"{' | 发布时间：' + html.escape(article.published_at) if article.published_at else ''}"
                 f" | 正文来源：{html.escape(item.get('content_source') or 'none')}</p>",
+            ])
+            if ai_summary:
+                parts.extend([
+                    "<h4>AI 摘要</h4>",
+                    f"<div class='content'>{html.escape(ai_summary)}</div>",
+                    "<h4>正文摘录</h4>",
+                ])
+            else:
+                parts.append("<h4>正文摘录</h4>")
+            parts.extend([
                 f"<div class='content'>{html.escape(content)}</div>",
                 "</div>",
             ])

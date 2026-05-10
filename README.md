@@ -80,6 +80,19 @@ JINA_API_KEY=
 - `ARTICLE_CONTENT_MAX_ARTICLES` 用来限制每轮最多抓几篇，避免定时任务跑太久。
 - `ARTICLE_CONTENT_USE_JINA=true` 会优先用 Jina Reader 抽正文，失败后回退到本地 HTML 解析。
 
+## 单网页监控 AI 摘要
+
+单网页监控会先抓取文章正文，再尝试生成 AI 摘要。邮件中会优先展示“AI 摘要”，再展示“正文摘录”。如果未配置 `AI_API_KEY`，系统会自动跳过 AI 摘要，继续发送正文摘录。
+
+```env
+WATCH_AI_SUMMARY_ENABLED=true
+AI_API_KEY=your_ai_api_key
+AI_MODEL=deepseek/deepseek-chat
+AI_API_BASE=
+WATCH_AI_SUMMARY_MAX_INPUT_CHARS=6000
+WATCH_AI_SUMMARY_MAX_TOKENS=700
+```
+
 ## 本地运行
 
 ```bash

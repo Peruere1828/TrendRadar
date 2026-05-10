@@ -339,6 +339,7 @@ h1{font-size:22px;margin:0 0 6px}.hint{color:#6b7280;margin:0 0 22px;line-height
 label{display:block;font-weight:600;margin:16px 0 6px}
 input,textarea{width:100%;box-sizing:border-box;border:1px solid #d1d5db;border-radius:6px;padding:10px;font-size:15px}
 textarea{min-height:86px;resize:vertical}
+.check{display:flex;align-items:center;gap:8px;margin-top:16px}.check input{width:auto}.check label{margin:0}
 .row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 button{margin-top:20px;background:#0b57d0;color:#fff;border:0;border-radius:6px;padding:11px 18px;font-weight:700;cursor:pointer}
 button:disabled{opacity:.6;cursor:not-allowed}.status{margin-top:14px;padding:10px;border-radius:6px;display:none}
@@ -372,6 +373,12 @@ button:disabled{opacity:.6;cursor:not-allowed}.status{margin-top:14px;padding:10
     </div>
   </div>
 
+  <div class="check">
+    <input id="aiSummary" type="checkbox">
+    <label for="aiSummary">启用 AI 摘要</label>
+  </div>
+  <div class="small">需配置 AI_API_KEY；未配置时会自动退回正文摘录。</div>
+
   <button id="saveBtn" onclick="saveConfig()">保存配置</button>
   <div id="status" class="status"></div>
 </div>
@@ -387,6 +394,7 @@ async function loadConfig(){
   $('emailTo').value=d.email_to||'';
   $('sourceName').value=d.source_name||'';
   $('interval').value=d.check_interval||1800;
+  $('aiSummary').checked=d.ai_summary_enabled!==false;
 }
 async function saveConfig(){
   const btn=$('saveBtn');btn.disabled=true;
@@ -396,7 +404,8 @@ async function saveConfig(){
       keywords:$('keywords').value,
       email_to:$('emailTo').value.trim(),
       source_name:$('sourceName').value.trim(),
-      check_interval:Number($('interval').value||1800)
+      check_interval:Number($('interval').value||1800),
+      ai_summary_enabled:$('aiSummary').checked
     };
     const r=await fetch('/api/single-watch/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
     const d=await r.json();
@@ -656,6 +665,7 @@ class TrendRadarHandler(SimpleHTTPRequestHandler):
         data.setdefault("email_to", os.environ.get("EMAIL_TO", ""))
         data.setdefault("source_name", os.environ.get("WATCH_SOURCE_NAME", ""))
         data.setdefault("check_interval", int(os.environ.get("CHECK_INTERVAL", "1800") or "1800"))
+        data.setdefault("ai_summary_enabled", os.environ.get("WATCH_AI_SUMMARY_ENABLED", "true").lower() not in {"0", "false", "no", "off"})
         data["path"] = str(SINGLE_WATCH_CONFIG_FILE)
         self._json(data)
 
@@ -693,6 +703,7 @@ class TrendRadarHandler(SimpleHTTPRequestHandler):
             "email_to": email_to,
             "source_name": source_name,
             "check_interval": check_interval,
+            "ai_summary_enabled": bool(body.get("ai_summary_enabled", True)),
             "updated_at": datetime.now().isoformat(timespec="seconds"),
         }
 

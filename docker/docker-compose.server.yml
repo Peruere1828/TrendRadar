@@ -65,10 +65,10 @@ services:
     container_name: trendradar-mcp-jjy
     restart: unless-stopped
     ports:
-      - "0.0.0.0:7001:3333"
+      - "127.0.0.1:3335:3335"
     volumes:
       - ../config:/app/config:ro
       - ../output:/app/output
     environment:
       - TZ=Asia/Shanghai
-      - MCP_PORT=3333
+      - MCP_PORT=3335
