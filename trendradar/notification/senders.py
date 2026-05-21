@@ -319,7 +319,7 @@ def send_to_dingtalk(
         payload = {
             "msgtype": "markdown",
             "markdown": {
-                "title": f"TrendRadar 热点分析报告 - {report_type}",
+                "title": f"智汇 热点分析报告 - {report_type}",
                 "text": batch_content,
             },
         }
@@ -695,7 +695,7 @@ def send_to_email(
         msg = MIMEMultipart("alternative")
 
         # 严格按照 RFC 标准设置 From header
-        sender_name = "TrendRadar"
+        sender_name = "智汇"
         msg["From"] = formataddr((sender_name, from_email))
 
         # 设置收件人
@@ -709,7 +709,7 @@ def send_to_email(
         if report_data is not None:
             subject = build_subject(report_data, report_type, now)
         else:
-            subject = f"TrendRadar 热点分析报告 - {report_type} - {now.strftime('%m月%d日 %H:%M')}"
+            subject = f"智汇 热点分析报告 - {report_type} - {now.strftime('%m月%d日 %H:%M')}"
         msg["Subject"] = Header(subject, "utf-8")
 
         # 设置其他标准 header
@@ -722,7 +722,7 @@ def send_to_email(
             text_content = render_email_plain_text(report_data, report_type, now, rss_items)
         else:
             text_content = f"""
-TrendRadar 热点分析报告
+智汇 热点分析报告
 ========================
 报告类型：{report_type}
 生成时间：{now.strftime('%Y-%m-%d %H:%M:%S')}
@@ -1114,7 +1114,7 @@ def send_to_bark(
             "markdown": batch_content,
             "device_key": device_key,
             "sound": "default",
-            "group": "TrendRadar",
+            "group": "智汇",
             "action": "none",  # 点击推送跳到 APP 不弹出弹框,方便阅读
         }
 

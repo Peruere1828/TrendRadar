@@ -11,6 +11,8 @@ from typing import List, Optional, Dict, Union
 
 from fastmcp import FastMCP
 
+from trendradar.openclaw import init_session as _oc_init, get_session as _oc_get
+
 from .tools.data_query import DataQueryTools
 from .tools.analytics import AnalyticsTools
 from .tools.search_tools import SearchTools
@@ -1114,6 +1116,23 @@ async def send_notification(
 
 # ==================== 启动入口 ====================
 
+def _clear_unreachable_env_proxies() -> None:
+    """清除环境变量中不可达的代理，避免 requests 库自动使用失效代理"""
+    import os
+    import socket
+    import urllib.parse
+    for env_var in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"):
+        proxy_url = os.environ.get(env_var, "")
+        if proxy_url:
+            try:
+                parsed = urllib.parse.urlparse(proxy_url)
+                s = socket.create_connection((parsed.hostname, parsed.port), timeout=3)
+                s.close()
+            except Exception:
+                print(f"MCP: 环境变量 {env_var}={proxy_url} 代理不可达，已切换为无代理模式")
+                os.environ.pop(env_var, None)
+
+
 def run_server(
     project_root: Optional[str] = None,
     transport: str = 'stdio',
@@ -1129,8 +1148,20 @@ def run_server(
         host: HTTP模式的监听地址，默认 0.0.0.0
         port: HTTP模式的监听端口，默认 3333
     """
+    # 清除不可达的环境代理（必须在任何网络请求之前）
+    _clear_unreachable_env_proxies()
+
     # 初始化工具实例
     _get_tools(project_root)
+
+    # 让 OpenClaw 龙虾也来打个招呼
+    try:
+        from trendradar import __version__ as _tv
+    except ImportError:
+        _tv = "?.?.?"
+    _oc = _oc_get()
+    _oc.banner(_tv)
+    _oc.think("MCP server starting up, ready to serve tools", "startup")
 
     # 打印启动信息
     print()

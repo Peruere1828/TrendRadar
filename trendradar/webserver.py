@@ -48,7 +48,7 @@ MY_INTEREST_HTML = r"""<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>My Interest - TrendRadar</title>
+<title>My Interest - 智汇</title>
 <style>
 :root {
   --bg: #1a1a2e; --card: #16213e; --card2: #0f3460;
@@ -135,25 +135,25 @@ textarea:focus { outline: none; border-color: var(--accent); }
 </head>
 <body>
 <div class="container">
-  <h1>My Interest Config</h1>
-  <p class="subtitle">Describe what you care about in natural language. AI extracts tags and classifies news automatically. Changes take effect on the next scheduled run.</p>
+  <h1>我的兴趣配置</h1>
+  <p class="subtitle">用自然语言描述你关注的话题，AI 自动提取标签并分类新闻。修改后将在下次调度运行时生效。</p>
 
   <div class="card">
-    <h2>Interest Description</h2>
-    <textarea id="interestsInput" placeholder="Describe topics you care about..."></textarea>
+    <h2>兴趣描述</h2>
+    <textarea id="interestsInput" placeholder="描述你关注的话题..."></textarea>
     <div class="btn-row">
-      <button class="btn btn-primary" id="btnSave" onclick="saveInterests()">Save</button>
-      <button class="btn btn-secondary" id="btnPreview" onclick="previewTags()">AI Preview Tags</button>
-      <button class="btn btn-outline" id="btnReset" onclick="loadInterests()">Reload</button>
+      <button class="btn btn-primary" id="btnSave" onclick="saveInterests()">保存</button>
+      <button class="btn btn-secondary" id="btnPreview" onclick="previewTags()">AI 预览标签</button>
+      <button class="btn btn-outline" id="btnReset" onclick="loadInterests()">重新加载</button>
     </div>
     <div id="status" class="status"></div>
   </div>
 
   <div class="card" id="tagsCard" style="display:none;">
-    <h2>AI-Extracted Tags <span style="font-weight:400;font-size:0.8rem;color:var(--text2);">(drag to reorder priority)</span></h2>
+    <h2>AI 提取的标签 <span style="font-weight:400;font-size:0.8rem;color:var(--text2);">（拖拽调整优先级）</span></h2>
     <div class="tag-list" id="tagList"></div>
     <div class="news-sample" id="newsSample" style="display:none;">
-      <h2 style="margin-bottom:12px;">News Samples: <span id="newsSampleTitle"></span></h2>
+      <h2 style="margin-bottom:12px;">新闻样本：<span id="newsSampleTitle"></span></h2>
       <div id="newsList"></div>
     </div>
   </div>
@@ -177,7 +177,7 @@ async function loadInterests() {
     const d = await r.json();
     $('interestsInput').value = d.content || '';
   } catch(e) {
-    showStatus('Load failed: ' + e.message, 'error');
+    showStatus('加载失败： ' + e.message, 'error');
   }
 }
 
@@ -193,12 +193,12 @@ async function saveInterests() {
     });
     const d = await r.json();
     if (d.success) {
-      showStatus('Saved. Takes effect on next run.', 'success');
+      showStatus('已保存，将在下次运行时生效。', 'success');
     } else {
-      showStatus('Save failed: ' + (d.error || 'unknown'), 'error');
+      showStatus('保存失败：' + (d.error || '未知错误'), 'error');
     }
   } catch(e) {
-    showStatus('Request failed: ' + e.message, 'error');
+    showStatus('请求失败：' + e.message, 'error');
   } finally {
     btn.disabled = false; btn.innerHTML = 'Save';
   }
@@ -210,7 +210,7 @@ async function previewTags() {
   $('newsSample').style.display = 'none';
   try {
     const content = $('interestsInput').value;
-    if (!content.trim()) { showStatus('Please enter interest description first', 'error'); return; }
+    if (!content.trim()) { showStatus('请先输入兴趣描述', 'error'); return; }
     const r = await fetch('/api/interests/preview', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
@@ -218,15 +218,15 @@ async function previewTags() {
     });
     const d = await r.json();
     if (d.error) {
-      showStatus('AI extraction failed: ' + d.error, 'error');
+      showStatus('AI 提取失败：' + d.error, 'error');
     } else {
       currentTags = d.tags || [];
       renderTags();
       $('tagsCard').style.display = 'block';
-      showStatus('AI extracted ' + currentTags.length + ' tags', 'success');
+      showStatus('AI 已提取 ' + currentTags.length + ' 个标签', 'success');
     }
   } catch(e) {
-    showStatus('Request failed: ' + e.message, 'error');
+    showStatus('请求失败：' + e.message, 'error');
   } finally {
     btn.disabled = false; btn.innerHTML = 'AI Preview Tags';
   }
@@ -248,7 +248,7 @@ function renderTags() {
     '<div class="tag-desc">' + escHtml(t.description || '') + '</div>' +
     '</div>' +
     '<div class="tag-actions">' +
-    '<button onclick="previewNews(' + i + ')">View Samples</button>' +
+    '<button onclick="previewNews(' + i + ')">查看样本</button>' +
     '</div></div>'
   ).join('');
 }
@@ -288,7 +288,7 @@ async function previewNews(tagIdx) {
   const tag = currentTags[tagIdx];
   $('newsSample').style.display = 'block';
   $('newsSampleTitle').textContent = '"' + tag.tag + '"';
-  $('newsList').innerHTML = '<div class="empty-state"><span class="spinner"></span> AI classifying...</div>';
+  $('newsList').innerHTML = '<div class="empty-state"><span class="spinner"></span> AI 分类中...</div>';
   try {
     const content = $('interestsInput').value;
     const r = await fetch('/api/interests/preview-news', {
@@ -300,13 +300,13 @@ async function previewNews(tagIdx) {
     if (d.error) {
       $('newsList').innerHTML = '<div class="empty-state">' + escHtml(d.error) + '</div>';
     } else if (!d.results || !d.results.length) {
-      $('newsList').innerHTML = '<div class="empty-state">No matching news samples found</div>';
+      $('newsList').innerHTML = '<div class="empty-state">未找到匹配的新闻样本</div>';
     } else {
       $('newsList').innerHTML = d.results.map((item, i) =>
         '<div class="news-item">' +
         '<div class="news-title">' + (i + 1) + '. ' + escHtml(item.title) + '</div>' +
         '<div class="news-meta">' +
-        '<span class="news-score">Match: ' + (item.score * 100).toFixed(0) + '%</span>' +
+        '<span class="news-score">匹配度：' + (item.score * 100).toFixed(0) + '%</span>' +
         (item.source ? ' &middot; ' + escHtml(item.source) : '') +
         '</div></div>'
       ).join('');
@@ -331,7 +331,7 @@ SINGLE_WATCH_HTML = r"""<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Single Watch - TrendRadar</title>
+<title>Single Watch - 智汇</title>
 <style>
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#f6f7f9;color:#1f2937;margin:0;padding:24px}
 .wrap{max-width:760px;margin:0 auto;background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:24px}
@@ -492,16 +492,16 @@ def _ai_classify_news(content: str, tags: list, sample_size: int = 8) -> dict:
         for i, t in enumerate(tags)
     )
     classify_prompt = (
-        f"User interest tags:\n{tags_text}\n\n"
-        f"Below are {len(recent_news)} news headlines. "
-        f"Match each news item to the most relevant tag(s) above.\n"
-        f"Score each match 0.0-1.0. Only return items with score >= 0.5. Max {sample_size} results.\n\n"
-        f"News:\n"
+        f"用户兴趣标签：\n{tags_text}\n\n"
+        f"以下是 {len(recent_news)} 条新闻标题。"
+        f"将每条新闻匹配到上面最相关的标签。\n"
+        f"评分 0.0-1.0，只返回 score >= 0.5 的结果，最多 {sample_size} 条。\n\n"
+        f"新闻列表：\n"
     )
     for i, news in enumerate(recent_news):
         classify_prompt += f"{i + 1}. [{news.get('source', '')}] {news['title']}\n"
 
-    classify_prompt += '\nReturn JSON: {"results": [{"title": "...", "score": 0.9, "source": "...", "tag": "matched tag name"}]}'
+    classify_prompt += '\n返回 JSON：{"results": [{"title": "...", "score": 0.9, "source": "...", "tag": "匹配的标签名"}]}'
 
     try:
         import litellm
@@ -539,11 +539,11 @@ def _load_recent_news(limit: int = 40) -> list:
         conn = sqlite3.connect(str(db_files[0]))
         conn.row_factory = sqlite3.Row
         cursor = conn.execute(
-            "SELECT DISTINCT title, platform_name FROM news_items "
-            "ORDER BY last_time DESC LIMIT ?",
+            "SELECT DISTINCT title, platform_id FROM news_items "
+            "ORDER BY last_crawl_time DESC LIMIT ?",
             (limit,)
         )
-        rows = [{"title": r["title"], "source": r["platform_name"]} for r in cursor.fetchall()]
+        rows = [{"title": r["title"], "source": r["platform_id"]} for r in cursor.fetchall()]
         conn.close()
         return rows
     except Exception as e:

@@ -3,20 +3,22 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    container_name: trendradar
+      args:
+        - HTTP_PROXY=http://10.22.43.143:7897
+        - HTTPS_PROXY=http://10.22.43.143:7897
     restart: unless-stopped
 
     ports:
-      - "127.0.0.1:${WEBSERVER_PORT:-8080}:${WEBSERVER_PORT:-8080}"
+      - "0.0.0.0:${WEBSERVER_PORT:-9999}:${WEBSERVER_PORT:-9999}"
 
     volumes:
-      - ../config:/app/config:ro
+      - ../config:/app/config
       - ../output:/app/output
 
     environment:
       - TZ=Asia/Shanghai
       # Web 服务器
-      - WEBSERVER_PORT=${WEBSERVER_PORT:-8080}
+      - WEBSERVER_PORT=${WEBSERVER_PORT:-9999}
       # 通知渠道
       - FEISHU_WEBHOOK_URL=${FEISHU_WEBHOOK_URL:-}
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
@@ -72,16 +74,15 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile.mcp
-    container_name: trendradar-mcp
     restart: unless-stopped
 
     ports:
-      - "${MCP_HOST:-127.0.0.1}:${MCP_PORT:-3333}:3333"
+      - "${MCP_HOST:-127.0.0.1}:${MCP_PORT:-3334}:${MCP_PORT:-3334}"
 
     volumes:
-      - ../config:/app/config:ro
+      - ../config:/app/config
       - ../output:/app/output
 
     environment:
       - TZ=Asia/Shanghai
-      - MCP_PORT=${MCP_PORT:-3333}
+      - MCP_PORT=${MCP_PORT:-3334}

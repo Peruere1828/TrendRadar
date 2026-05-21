@@ -28,7 +28,9 @@ from trendradar.crawler.article_content import ArticleContentFetcher
 from trendradar.storage import convert_crawl_results_to_news_data
 from trendradar.utils.time import DEFAULT_TIMEZONE, is_within_days, calculate_days_old
 from trendradar.ai import AIAnalyzer, AIAnalysisResult
+from trendradar.ai.client import AIClient
 from trendradar.core.scheduler import ResolvedSchedule
+from trendradar.openclaw import init_session, get_session, reset_session
 
 
 def _parse_version(version_str: str) -> Tuple[int, int, int]:
@@ -53,6 +55,22 @@ def _compare_version(local: str, remote: str) -> str:
         return "🔮 超前版本"
     else:
         return "✅ 已是最新"
+
+
+def _clear_env_proxies_if_unreachable() -> None:
+    """清除环境变量中不可达的代理，避免 requests 库自动使用失效代理"""
+    for env_var in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"):
+        proxy_url = os.environ.get(env_var, "")
+        if proxy_url:
+            try:
+                import socket
+                import urllib.parse
+                parsed = urllib.parse.urlparse(proxy_url)
+                s = socket.create_connection((parsed.hostname, parsed.port), timeout=3)
+                s.close()
+            except Exception:
+                print(f"环境变量 {env_var}={proxy_url} 代理不可达，已切换为无代理模式")
+                os.environ.pop(env_var, None)
 
 
 def _fetch_remote_version(version_url: str, proxy_url: Optional[str] = None) -> Optional[str]:
@@ -220,9 +238,13 @@ class NewsAnalyzer:
         if config is None:
             print("正在加载配置...")
             config = load_config()
-        print(f"TrendRadar v{__version__} 配置加载完成")
+        print(f"智汇 v{__version__} 配置加载完成")
         print(f"监控平台数量: {len(config['PLATFORMS'])}")
         print(f"时区: {config.get('TIMEZONE', DEFAULT_TIMEZONE)}")
+
+        # 初始化 OpenClaw 龙虾 AI Agent 会话
+        ai_cfg = config.get("AI", {})
+        init_session(ai_cfg if ai_cfg.get("API_KEY") else None)
 
         # 创建应用上下文
         self.ctx = AppContext(config)
@@ -276,11 +298,30 @@ class NewsAnalyzer:
         """判断是否应该打开浏览器"""
         return not self.is_github_actions and not self.is_docker_container
 
+    @staticmethod
+    def _is_proxy_reachable(proxy_url: str, timeout: int = 3) -> bool:
+        """检测代理是否可达"""
+        try:
+            import socket
+            import urllib.parse
+            parsed = urllib.parse.urlparse(proxy_url)
+            s = socket.create_connection((parsed.hostname, parsed.port), timeout=timeout)
+            s.close()
+            return True
+        except Exception:
+            return False
+
     def _setup_proxy(self) -> None:
         """设置代理配置"""
         if not self.is_github_actions and self.ctx.config["USE_PROXY"]:
             self.proxy_url = self.ctx.config["DEFAULT_PROXY"]
-            print("本地环境，使用代理")
+            if self.proxy_url and self._is_proxy_reachable(self.proxy_url):
+                print("本地环境，使用代理")
+            elif self.proxy_url:
+                print(f"代理 {self.proxy_url} 不可达，切换为无代理模式")
+                self.proxy_url = None
+            else:
+                print("本地环境，未配置代理")
         elif not self.is_github_actions and not self.ctx.config["USE_PROXY"]:
             print("本地环境，未启用代理")
         else:
@@ -486,10 +527,15 @@ class NewsAnalyzer:
                 print(f"[AI] 调度器: 时间段 {schedule.period_name or schedule.period_key} 今天首次分析")
 
         print("[AI] 正在进行 AI 分析...")
+        oc = get_session()
+        oc.think("about to run AI analysis on the collected data", "analyze")
         try:
             ai_config = self.ctx.config.get("AI", {})
             debug_mode = self.ctx.config.get("DEBUG", False)
             analyzer = AIAnalyzer(ai_config, analysis_config, self.ctx.get_time, debug=debug_mode)
+            oc.tool_call("claw_analyze",
+                         f"mode={mode}, keywords={len([s for s in stats if s.get('word')]) if stats else 0}",
+                         "invoking AI model via LiteLLM...")
 
             # 确定 AI 分析使用的模式
             ai_mode_config = analysis_config.get("MODE", "follow_report")
@@ -559,6 +605,11 @@ class NewsAnalyzer:
                     print(f"[AI] 分析完成（有警告: {result.error}）")
                 else:
                     print("[AI] 分析完成")
+
+                oc.tool_call("claw_analyze",
+                             f"result=success, mode={ai_mode}",
+                             "AI analysis complete, ganglion satisfied")
+                oc.think("AI analysis results look promising", "analyze")
 
                 # 记录 AI 分析
                 if schedule.once_analyze and schedule.period_key:
@@ -815,13 +866,20 @@ class NewsAnalyzer:
         """统一的分析流水线：数据处理 → 统计计算（关键词/AI筛选）→ AI分析 → HTML生成"""
 
         # 根据筛选策略选择数据处理方式
+        oc = get_session()
         if self.filter_method == "ai":
             # === AI 筛选策略 ===
             print("[筛选] 使用 AI 智能筛选策略")
+            oc.tool_call("claw_filter",
+                         f"method=ai, interests_file={self.interests_file or 'default'}",
+                         "running AI-based content filter...")
             ai_filter_result = self.ctx.run_ai_filter(interests_file=self.interests_file)
 
             if ai_filter_result and ai_filter_result.success:
                 print(f"[筛选] AI 筛选完成: {ai_filter_result.total_matched} 条匹配, {len(ai_filter_result.tags)} 个标签")
+                oc.tool_call("claw_filter",
+                             f"result=success",
+                             f"{ai_filter_result.total_matched} matched, {len(ai_filter_result.tags)} tags")
                 # 转换为与关键词匹配相同的数据结构
                 stats, ai_rss_stats = self.ctx.convert_ai_filter_to_report_data(
                     ai_filter_result, mode=mode,
@@ -843,6 +901,9 @@ class NewsAnalyzer:
                 )
         else:
             # === 关键词匹配策略（默认）===
+            oc.tool_call("claw_filter",
+                         f"method=keyword, groups={len(word_groups)}",
+                         "matching keywords against titles...")
             stats, total_titles = self.ctx.count_frequency(
                 data_source, word_groups, filter_words,
                 id_to_name, title_info, new_titles,
@@ -893,6 +954,10 @@ class NewsAnalyzer:
         # HTML生成（如果启用）— 使用翻译后的数据
         html_file = None
         if self.ctx.config["STORAGE"]["FORMATS"]["HTML"]:
+            oc.think("time to write the HTML report with my pincers", "report")
+            oc.tool_call("claw_write",
+                         f"dest=output/html/{self.ctx.format_date()}/",
+                         f"rendering {total_titles} titles into HTML...")
             html_file = self.ctx.generate_html(
                 stats,
                 total_titles,
@@ -907,6 +972,9 @@ class NewsAnalyzer:
                 standalone_data=standalone_data,
                 frequency_file=self.frequency_file,
             )
+            if html_file:
+                oc.write(f"output/html/{self.ctx.format_date()}/",
+                         f"HTML report written successfully ({mode} mode)")
 
         return stats, html_file, ai_result, rss_items
 
@@ -977,16 +1045,60 @@ class NewsAnalyzer:
             f"[正文抓取] 开始抓取 {len(candidates)} 篇文章"
             f"（only_new={only_new}, hotlist={include_hotlist}, rss={include_rss}）"
         )
+        oc = get_session()
+        success_count = 0
         for index, (title_data, source_type, url) in enumerate(candidates, 1):
             title = title_data.get("title", "")
+            oc.tool_call("claw_read",
+                         f"url={url[:80]}",
+                         f"fetching article via Jina...")
             result = fetcher.fetch(url, title)
             if result.success and result.content:
                 title_data["article_content"] = result.content
                 title_data["article_content_source"] = result.source
                 print(f"[正文抓取] {index}/{len(candidates)} 成功 [{source_type}] {title[:60]}")
+                success_count += 1
+                oc.read(f"article:{source_type}", title[:80])
             else:
                 title_data["article_content_error"] = result.error or "unknown error"
                 print(f"[正文抓取] {index}/{len(candidates)} 失败 [{source_type}] {title[:60]}: {title_data['article_content_error']}")
+
+        # AI 摘要：为成功抓取正文的文章生成摘要
+        ai_config = self.ctx.config.get("AI", {})
+        if ai_config.get("API_KEY") and ai_config.get("MODEL"):
+            summarized = 0
+            oc.tool_call("claw_summarize",
+                         f"articles={success_count}",
+                         "generating AI summaries with gastric mill...")
+            try:
+                ai_client = AIClient(ai_config)
+                for title_data, _source_type, _url in candidates:
+                    content = title_data.get("article_content", "")
+                    if not content:
+                        continue
+                    title = title_data.get("title", "")
+                    prompt = (
+                        f"请用 2-4 句话概括以下文章的核心内容，输出中文，简洁、可直接放入邮件。\n"
+                        f"文章标题：{title}\n"
+                        f"文章正文：{content[:6000]}"
+                    )
+                    try:
+                        summary = ai_client.chat(
+                            [{"role": "user", "content": prompt}],
+                            temperature=0.2,
+                            max_tokens=500,
+                        )
+                        if summary and summary.strip():
+                            title_data["ai_summary"] = summary.strip()
+                            summarized += 1
+                    except Exception as e:
+                        print(f"[AI摘要] 失败 - {title[:40]}: {e}")
+                if summarized > 0:
+                    print(f"[AI摘要] 成功生成 {summarized} 篇摘要")
+            except Exception as e:
+                print(f"[AI摘要] AI 客户端初始化失败: {e}")
+        else:
+            print("[AI摘要] 跳过：AI_API_KEY 或 AI_MODEL 未配置")
 
     def _send_notification_if_needed(
         self,
@@ -1031,6 +1143,9 @@ class NewsAnalyzer:
             total_count = news_count + rss_count
             print(f"[推送] 准备发送：{' + '.join(content_parts)}，合计 {total_count} 条")
 
+            oc = get_session()
+            oc.think("preparing to send notifications through my bioluminescent channels", "notify")
+
             # 调度系统决策
             if not schedule.push:
                 print("[推送] 调度器: 当前时间段不执行推送")
@@ -1063,6 +1178,16 @@ class NewsAnalyzer:
             # 使用 NotificationDispatcher 发送到所有渠道
             # RSS/独立展示区数据已在分析流水线中翻译过，跳过重复翻译（仅翻译热榜 report_data）
             dispatcher = self.ctx.create_notification_dispatcher()
+            channel_count = sum(1 for v in [
+                cfg.get("FEISHU_WEBHOOK_URL"), cfg.get("DINGTALK_WEBHOOK_URL"),
+                cfg.get("WEWORK_WEBHOOK_URL"),
+                cfg.get("TELEGRAM_BOT_TOKEN"), cfg.get("EMAIL_FROM"),
+                cfg.get("NTFY_TOPIC"), cfg.get("BARK_URL"),
+                cfg.get("SLACK_WEBHOOK_URL"), cfg.get("GENERIC_WEBHOOK_URL"),
+            ] if v)
+            oc.tool_call("claw_send",
+                         f"channels={channel_count}",
+                         f"dispatching {total_count} items via bioluminescence...")
             results = dispatcher.dispatch_all(
                 report_data=report_data,
                 report_type=report_type,
@@ -1083,6 +1208,10 @@ class NewsAnalyzer:
 
             # 记录推送成功
             if any(results.values()):
+                success_channels = [ch for ch, ok in results.items() if ok]
+                oc.tool_call("claw_send",
+                             f"status=success",
+                             f"delivered to {len(success_channels)} channels: {', '.join(success_channels[:5])}")
                 if schedule.once_push and schedule.period_key:
                     scheduler = self.ctx.create_scheduler()
                     date_str = self.ctx.format_date()
@@ -1116,6 +1245,10 @@ class NewsAnalyzer:
         """通用初始化和配置检查。返回 True 表示可以继续执行。"""
         now = self.ctx.get_time()
         print(f"当前北京时间: {now.strftime('%Y-%m-%d %H:%M:%S')}")
+        oc = get_session()
+        oc.tool_call("claw_observe",
+                     f"time={now.strftime('%Y-%m-%d %H:%M:%S')}",
+                     "environment check, antennae scanning...")
 
         if not self.ctx.config["ENABLE_CRAWLER"]:
             print("爬虫功能已禁用（ENABLE_CRAWLER=False），程序退出")
@@ -1136,6 +1269,9 @@ class NewsAnalyzer:
 
     def _crawl_data(self) -> Tuple[Dict, Dict, List]:
         """执行数据爬取"""
+        oc = get_session()
+        oc.think("about to crawl news platforms for fresh data", "crawl")
+
         ids = []
         for platform in self.ctx.platforms:
             if "name" in platform:
@@ -1143,15 +1279,25 @@ class NewsAnalyzer:
             else:
                 ids.append(platform["id"])
 
+        platform_names = [p.get('name', p['id']) for p in self.ctx.platforms]
         print(
-            f"配置的监控平台: {[p.get('name', p['id']) for p in self.ctx.platforms]}"
+            f"配置的监控平台: {platform_names}"
         )
         print(f"开始爬取数据，请求间隔 {self.request_interval} 毫秒")
         Path("output").mkdir(parents=True, exist_ok=True)
 
+        oc.tool_call("claw_crawl",
+                     f"platforms=[{', '.join(str(p) for p in platform_names[:5])}]",
+                     f"interval={self.request_interval}ms, scuttling...")
+
         results, id_to_name, failed_ids = self.data_fetcher.crawl_websites(
             ids, self.request_interval
         )
+
+        total_items = sum(len(v) for v in results.values())
+        oc.tool_call("claw_observe",
+                     f"crawl_results",
+                     f"caught {total_items} items from {len(results)} platforms, {len(failed_ids)} failed")
 
         # 转换为 NewsData 格式并保存到存储后端
         crawl_time = self.ctx.format_time()
@@ -1163,11 +1309,22 @@ class NewsAnalyzer:
         # 保存到存储后端（SQLite）
         if self.storage_manager.save_news_data(news_data):
             print(f"数据已保存到存储后端: {self.storage_manager.backend_name}")
+            oc.tool_call("claw_remember",
+                         f"storage_backend={self.storage_manager.backend_name}",
+                         "data persisted to SQLite")
 
         # 保存 TXT 快照（如果启用）
         txt_file = self.storage_manager.save_txt_snapshot(news_data)
         if txt_file:
             print(f"TXT 快照已保存: {txt_file}")
+
+        for pname in platform_names[:3]:
+            items = results.get(pname, {})
+            if items:
+                sample = list(items.keys())[0] if items else ""
+                if sample:
+                    oc.read(f"hotlist:{pname}", sample)
+                    break
 
         return results, id_to_name, failed_ids
 
@@ -1183,6 +1340,7 @@ class NewsAnalyzer:
             - rss_new_urls: 原始新增 RSS 条目的 URL 集合（用于 AI 模式 is_new 检测）
             如果未启用或失败返回 (None, None, None, set())
         """
+        oc = get_session()
         if not self.ctx.rss_enabled:
             return None, None, None, set()
 
@@ -1255,6 +1413,11 @@ class NewsAnalyzer:
             ) if feeds else None
 
             # 抓取普通 RSS 数据
+            feed_urls = [f.url for f in feeds] if feeds else []
+            if feed_urls:
+                oc.tool_call("claw_fetch",
+                             f"sources=[{', '.join(f.id for f in feeds[:4])}]",
+                             f"fetching {len(feeds)} RSS feeds...")
             rss_data = fetcher.fetch_all() if fetcher else None
 
             # 抓取人民网 sitemap 数据
@@ -1287,6 +1450,19 @@ class NewsAnalyzer:
             # 保存到存储后端
             if self.storage_manager.save_rss_data(merged_data):
                 print(f"[RSS] 数据已保存到存储后端")
+                total_rss = merged_data.get_total_count() if hasattr(merged_data, 'get_total_count') else sum(len(v) for v in merged_data.items.values())
+                oc.tool_call("claw_remember",
+                             f"rss_store",
+                             f"{total_rss} RSS items persisted")
+
+                # Sample an RSS item for OpenClaw to "read"
+                for feed_id, items in merged_data.items.items():
+                    if items:
+                        first = items[0]
+                        title = first.get("title", "") if isinstance(first, dict) else str(first)
+                        if title:
+                            oc.read(f"rss:{feed_id}", title)
+                        break
 
                 # 处理 RSS 数据（按模式过滤）并返回用于合并推送
                 return self._process_rss_data_by_mode(merged_data)
@@ -1822,6 +1998,10 @@ class NewsAnalyzer:
 
     def run(self) -> None:
         """执行分析流程"""
+        oc = get_session()
+        start_time = __import__("time").time()
+        oc.startup_sequence(__version__)
+
         try:
             if not self._initialize_and_check_config():
                 return
@@ -1848,6 +2028,9 @@ class NewsAnalyzer:
         finally:
             # 清理资源（包括过期数据清理和数据库连接关闭）
             self.ctx.cleanup()
+            duration = __import__("time").time() - start_time
+            oc.summary(duration)
+            reset_session()
 
 
 def _record_doctor_result(results: List[Tuple[str, str, str]], status: str, item: str, detail: str) -> None:
@@ -1902,7 +2085,7 @@ def _save_doctor_report(
 def _run_doctor(config_path: Optional[str] = None) -> bool:
     """运行环境体检"""
     print("=" * 60)
-    print(f"TrendRadar v{__version__} 环境体检")
+    print(f"智汇 v{__version__} 环境体检")
     print("=" * 60)
 
     results: List[Tuple[str, str, str]] = []
@@ -2112,7 +2295,7 @@ def _build_test_report_data(ctx: AppContext) -> Dict:
     """构造通知测试用报告数据"""
     now = ctx.get_time()
     time_display = now.strftime("%H:%M")
-    title = f"TrendRadar 通知测试消息（{now.strftime('%Y-%m-%d %H:%M:%S')}）"
+    title = f"智汇 通知测试消息（{now.strftime('%Y-%m-%d %H:%M:%S')}）"
 
     return {
         "stats": [
@@ -2150,9 +2333,9 @@ def _create_test_html_file(ctx: AppContext) -> Optional[str]:
         html_path = output_dir / f"notification_test_{ctx.format_time()}.html"
         html_content = f"""<!DOCTYPE html>
 <html lang="zh-CN">
-<head><meta charset="UTF-8"><title>TrendRadar 通知测试</title></head>
+<head><meta charset="UTF-8"><title>智汇 通知测试</title></head>
 <body>
-<h2>TrendRadar 通知连通性测试</h2>
+<h2>智汇 通知连通性测试</h2>
 <p>测试时间：{now.strftime('%Y-%m-%d %H:%M:%S')} ({ctx.timezone})</p>
 <p>这是一条测试消息，用于验证邮件渠道是否可达。</p>
 </body>
@@ -2257,7 +2440,7 @@ def main():
     """主程序入口"""
     # 解析命令行参数
     parser = argparse.ArgumentParser(
-        description="TrendRadar - 热点新闻聚合与分析工具",
+        description="智汇 - 热点新闻聚合与分析工具",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 调度状态命令:
@@ -2322,6 +2505,9 @@ def main():
 
         config = load_config()
 
+        # 在一切网络请求之前，清除环境变量中不可达的代理
+        _clear_env_proxies_if_unreachable()
+
         # 处理状态查看命令
         if args.show_schedule:
             _handle_status_commands(config)
@@ -2375,7 +2561,7 @@ def _handle_status_commands(config: Dict) -> None:
     ctx = AppContext(config)
 
     print("=" * 60)
-    print(f"TrendRadar v{__version__} 调度状态")
+    print(f"智汇 v{__version__} 调度状态")
     print("=" * 60)
 
     try:

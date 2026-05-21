@@ -1263,7 +1263,7 @@ def render_html_content(
         <div class="reading-progress"></div>
         <div class="container">
             <div class="header">
-                <div class="header-watermark">TrendRadar</div>
+                <div class="header-watermark">智汇</div>
                 <div class="save-buttons">
                     <button class="toggle-wide-btn" onclick="toggleWideMode()" title="切换宽屏/窄屏">⛶</button>
                     <button class="toggle-dark-btn" onclick="toggleDarkMode()" title="切换暗色/亮色">☽</button>
@@ -1457,19 +1457,21 @@ def render_html_content(
                 else:
                     stats_html += escaped_title
 
+                ai_summary = title_data.get("ai_summary", "")
                 article_content = title_data.get("article_content", "")
                 article_source = title_data.get("article_content_source", "")
                 article_error = title_data.get("article_content_error", "")
-                if article_content:
+                if ai_summary:
+                    meta = "AI 摘要"
+                    stats_html += f"""
+                            <div class="article-content-box">
+                                <div class="article-content-meta">{html_escape(meta)}</div>{html_escape(ai_summary)}
+                            </div>"""
+                elif article_content:
                     meta = f"正文来源：{article_source}" if article_source else "正文内容"
                     stats_html += f"""
                             <div class="article-content-box">
                                 <div class="article-content-meta">{html_escape(meta)}</div>{html_escape(article_content)}
-                            </div>"""
-                elif article_error:
-                    stats_html += f"""
-                            <div class="article-content-box">
-                                <div class="article-content-meta">正文抓取失败</div>{html_escape(article_error)}
                             </div>"""
 
                 stats_html += """
@@ -1539,19 +1541,20 @@ def render_html_content(
                 else:
                     new_titles_html += escaped_title
 
+                ai_summary = title_data.get("ai_summary", "")
                 article_content = title_data.get("article_content", "")
                 article_source = title_data.get("article_content_source", "")
-                article_error = title_data.get("article_content_error", "")
-                if article_content:
+                if ai_summary:
+                    meta = "AI 摘要"
+                    new_titles_html += f"""
+                                    <div class="article-content-box">
+                                        <div class="article-content-meta">{html_escape(meta)}</div>{html_escape(ai_summary)}
+                                    </div>"""
+                elif article_content:
                     meta = f"正文来源：{article_source}" if article_source else "正文内容"
                     new_titles_html += f"""
                                     <div class="article-content-box">
                                         <div class="article-content-meta">{html_escape(meta)}</div>{html_escape(article_content)}
-                                    </div>"""
-                elif article_error:
-                    new_titles_html += f"""
-                                    <div class="article-content-box">
-                                        <div class="article-content-meta">正文抓取失败</div>{html_escape(article_error)}
                                     </div>"""
 
                 new_titles_html += """
@@ -1655,19 +1658,20 @@ def render_html_content(
                 else:
                     rss_html += escaped_title
 
+                ai_summary = title_data.get("ai_summary", "")
                 article_content = title_data.get("article_content", "")
                 article_source = title_data.get("article_content_source", "")
-                article_error = title_data.get("article_content_error", "")
-                if article_content:
+                if ai_summary:
+                    meta = "AI 摘要"
+                    rss_html += f"""
+                                <div class="article-content-box">
+                                    <div class="article-content-meta">{html_escape(meta)}</div>{html_escape(ai_summary)}
+                                </div>"""
+                elif article_content:
                     meta = f"正文来源：{article_source}" if article_source else "正文内容"
                     rss_html += f"""
                                 <div class="article-content-box">
                                     <div class="article-content-meta">{html_escape(meta)}</div>{html_escape(article_content)}
-                                </div>"""
-                elif article_error:
-                    rss_html += f"""
-                                <div class="article-content-box">
-                                    <div class="article-content-meta">正文抓取失败</div>{html_escape(article_error)}
                                 </div>"""
 
                 rss_html += """
@@ -1994,7 +1998,7 @@ def render_html_content(
 
             <div class="footer">
                 <div class="footer-content">
-                    由 <span class="project-name">TrendRadar</span> 生成 ·
+                    由 <span class="project-name">智汇</span> 生成 ·
                     <a href="https://github.com/sansan0/TrendRadar" target="_blank" class="footer-link">
                         GitHub 开源项目
                     </a>"""
@@ -2324,7 +2328,7 @@ def render_html_content(
 
                     const link = document.createElement('a');
                     const now = new Date();
-                    const filename = `TrendRadar_热点新闻分析_${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}.png`;
+                    const filename = `智汇_热点新闻分析_${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}.png`;
 
                     link.download = filename;
                     link.href = canvas.toDataURL('image/png', 1.0);
@@ -2552,7 +2556,7 @@ def render_html_content(
 
                     // 下载所有图片
                     const now = new Date();
-                    const baseFilename = `TrendRadar_热点新闻分析_${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
+                    const baseFilename = `智汇_热点新闻分析_${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
 
                     for (let i = 0; i < images.length; i++) {
                         const link = document.createElement('a');

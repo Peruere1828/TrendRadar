@@ -72,7 +72,7 @@ def render_email_html(
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>TrendRadar 热点速报</title>
+<title>智汇 热点速报</title>
 </head>
 <body style="margin:0;padding:0;background-color:#f4f4f4;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;">
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#f4f4f4;">
@@ -125,8 +125,9 @@ def _extract_top_picks(stats: List[Dict], max_picks: int = 5) -> List[Dict]:
             min_rank = min(ranks) if ranks else 99
             ac = title_data.get("article_content", "")
             sm = title_data.get("summary", "")
-            raw_summary = ac or sm
-            clean_summary = _clean_article_summary(raw_summary, title_data.get("title", ""))
+            ai_summary = title_data.get("ai_summary", "")
+            raw_summary = ai_summary or ac or sm
+            clean_summary = raw_summary if ai_summary else _clean_article_summary(raw_summary, title_data.get("title", ""))
             candidates.append({
                 "keyword": keyword,
                 "title": title_data["title"],
@@ -181,7 +182,7 @@ def _render_header(
 
     return f"""<tr>
 <td style="background:linear-gradient(135deg,#4f46e5,#7c3aed);padding:28px 24px;text-align:center;color:#ffffff;">
-    <div style="font-size:22px;font-weight:700;margin:0 0 8px 0;">TrendRadar 热点速报</div>
+    <div style="font-size:22px;font-weight:700;margin:0 0 8px 0;">智汇 热点速报</div>
     <div style="font-size:13px;opacity:0.85;margin:0 0 12px 0;">{date_str} · {report_type} · {time_str}</div>
     <div style="font-size:14px;opacity:0.9;margin:0 0 8px 0;">今日匹配 <strong>{total_matched}</strong> 条热点，覆盖 <strong>{len(keyword_names)}</strong> 个话题</div>
     <div style="font-size:13px;opacity:0.75;">{kw_tags}</div>
@@ -308,7 +309,9 @@ def _render_stats_sections(stats: List[Dict]) -> str:
                 if is_new
                 else ""
             )
-            summary = _clean_article_summary(td.get("article_content") or td.get("summary", ""), td.get("title", ""), 150)
+            ai_summary = td.get("ai_summary", "")
+            raw_summary = ai_summary or td.get("article_content") or td.get("summary", "")
+            summary = raw_summary if ai_summary else _clean_article_summary(raw_summary, td.get("title", ""), 150)
             summary_line = ""
             if summary:
                 summary_line = (
@@ -431,7 +434,9 @@ def _render_rss_sections(
             source = html_escape(td.get("source_name", ""))
             url = td.get("url", "")
             time_display = td.get("time_display", "")
-            summary = _clean_article_summary(td.get("article_content") or td.get("summary", ""), td.get("title", ""), 150)
+            ai_summary = td.get("ai_summary", "")
+            raw_summary = ai_summary or td.get("article_content") or td.get("summary", "")
+            summary = raw_summary if ai_summary else _clean_article_summary(raw_summary, td.get("title", ""), 150)
             is_new = td.get("is_new", False)
             new_mark = (
                 ' <span style="color:#dc2626;font-size:10px;font-weight:700;">NEW</span>'
@@ -486,7 +491,7 @@ def _render_footer() -> str:
     return """<tr>
 <td style="padding:24px;text-align:center;background-color:#f8f9fa;border-top:1px solid #e5e7eb;">
     <div style="font-size:12px;color:#9ca3af;line-height:1.6;">
-        由 <span style="font-weight:600;color:#6b7280;">TrendRadar</span> 生成 ·
+        由 <span style="font-weight:600;color:#6b7280;">智汇</span> 生成 ·
         <a href="https://github.com/sansan0/TrendRadar" target="_blank"
            style="color:#4f46e5;text-decoration:none;font-weight:500;">GitHub 开源项目</a>
     </div>
@@ -506,7 +511,7 @@ def render_email_plain_text(
     date_str = now.strftime("%Y-%m-%d %H:%M")
 
     lines = [
-        "TrendRadar 热点速报",
+        "智汇 热点速报",
         "=" * 40,
         f"报告类型：{report_type}",
         f"生成时间：{date_str}",
@@ -544,7 +549,9 @@ def render_email_plain_text(
                     lines.append(f"       {source}{rank_str}")
                 if url:
                     lines.append(f"       {url}")
-                summary = _clean_article_summary(td.get("article_content") or td.get("summary", ""), td.get("title", ""), 150)
+                ai_summary = td.get("ai_summary", "")
+                raw_summary = ai_summary or td.get("article_content") or td.get("summary", "")
+                summary = raw_summary if ai_summary else _clean_article_summary(raw_summary, td.get("title", ""), 150)
                 if summary:
                     lines.append(f"       {summary[:200]}")
 
@@ -558,13 +565,15 @@ def render_email_plain_text(
                 lines.append(f"    · {td['title']}{time_str}")
                 if td.get("url"):
                     lines.append(f"      {td['url']}")
-                summary = _clean_article_summary(td.get("article_content") or td.get("summary", ""), td.get("title", ""), 150)
+                ai_summary = td.get("ai_summary", "")
+                raw_summary = ai_summary or td.get("article_content") or td.get("summary", "")
+                summary = raw_summary if ai_summary else _clean_article_summary(raw_summary, td.get("title", ""), 150)
                 if summary:
                     lines.append(f"      {summary[:200]}")
 
     lines.append("")
     lines.append("─" * 40)
-    lines.append("由 TrendRadar 生成 · https://github.com/sansan0/TrendRadar")
+    lines.append("由 智汇 生成 · https://github.com/sansan0/TrendRadar")
 
     return "\n".join(lines)
 
@@ -578,7 +587,7 @@ def build_subject(
 
     根据匹配热度自动选择格式：
     - 高热度（>=20条）：🔥「关键词」等N个话题有M条新热点
-    - 中热度（>=5条）：📊 关键词×12 关键词×8 · TrendRadar 速报
+    - 中热度（>=5条）：📊 关键词×12 关键词×8 · 智汇 速报
     - 低热度：📋 今日热点涉及你关注的关键词
     """
     stats = report_data.get("stats", [])
@@ -590,7 +599,7 @@ def build_subject(
     if total_matched >= 20:
         first_word = top3[0]["word"] if top3 else ""
         topic_count = len(stats)
-        return f"🔥「{first_word}」等{topic_count}个话题有{total_matched}条新热点 · TrendRadar"
+        return f"🔥「{first_word}」等{topic_count}个话题有{total_matched}条新热点 · 智汇"
 
     elif total_matched >= 5:
         parts = []
@@ -598,11 +607,11 @@ def build_subject(
             count = len(stat.get("titles", []))
             parts.append(f"{stat['word']}×{count}")
         kw_part = " ".join(parts)
-        return f"📊 {kw_part} · TrendRadar 速报"
+        return f"📊 {kw_part} · 智汇 速报"
 
     elif total_matched > 0:
         kw_list = "、".join(s["word"] for s in top3[:2])
-        return f"📋 今日热点涉及「{kw_list}」· TrendRadar"
+        return f"📋 今日热点涉及「{kw_list}」· 智汇"
 
     else:
         return f"TrendRadar · {now.strftime('%m月%d日')} {report_type}"

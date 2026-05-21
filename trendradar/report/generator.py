@@ -95,6 +95,8 @@ def prepare_report_data(
                         processed_title["article_content_source"] = title_data.get("article_content_source")
                     if title_data.get("article_content_error"):
                         processed_title["article_content_error"] = title_data.get("article_content_error")
+                    if title_data.get("ai_summary"):
+                        processed_title["ai_summary"] = title_data.get("ai_summary")
                     source_titles.append(processed_title)
 
                 if source_titles:
@@ -130,6 +132,8 @@ def prepare_report_data(
                 processed_title["article_content_source"] = title_data.get("article_content_source")
             if title_data.get("article_content_error"):
                 processed_title["article_content_error"] = title_data.get("article_content_error")
+            if title_data.get("ai_summary"):
+                processed_title["ai_summary"] = title_data.get("ai_summary")
             summary = title_data.get("summary", "")
             if summary:
                 processed_title["summary"] = summary
