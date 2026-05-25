@@ -602,6 +602,7 @@ advanced:
   # 热榜爬虫技术参数
   crawler:
     request_interval: 2000            # 请求间隔（毫秒）
+    concurrent_crawlers: 5            # 最大并发爬虫数
     use_proxy: false                  # 是否启用代理
     default_proxy: "http://127.0.0.1:10801"
 

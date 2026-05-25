@@ -12,6 +12,7 @@
 import json
 import random
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List, Tuple, Optional, Union
 
 import requests
@@ -118,13 +119,15 @@ class DataFetcher:
         self,
         ids_list: List[Union[str, Tuple[str, str]]],
         request_interval: int = 100,
+        max_workers: int = 5,
     ) -> Tuple[Dict, Dict, List]:
         """
-        爬取多个网站数据
+        并发爬取多个网站数据
 
         Args:
             ids_list: 平台ID列表，每个元素可以是字符串或 (平台ID, 别名) 元组
             request_interval: 请求间隔（毫秒）
+            max_workers: 最大并发爬虫数
 
         Returns:
             (结果字典, ID到名称的映射, 失败ID列表) 元组
@@ -133,52 +136,64 @@ class DataFetcher:
         id_to_name = {}
         failed_ids = []
 
-        for i, id_info in enumerate(ids_list):
+        # 构建 ID 映射
+        for id_info in ids_list:
             if isinstance(id_info, tuple):
                 id_value, name = id_info
             else:
                 id_value = id_info
                 name = id_value
-
             id_to_name[id_value] = name
-            response, _, _ = self.fetch_data(id_info)
 
-            if response:
-                try:
-                    data = json.loads(response)
-                    results[id_value] = {}
-
-                    for index, item in enumerate(data.get("items", []), 1):
-                        title = item.get("title")
-                        # 跳过无效标题（None、float、空字符串）
-                        if title is None or isinstance(title, float) or not str(title).strip():
-                            continue
-                        title = str(title).strip()
-                        url = item.get("url", "")
-                        mobile_url = item.get("mobileUrl", "")
-
-                        if title in results[id_value]:
-                            results[id_value][title]["ranks"].append(index)
-                        else:
-                            results[id_value][title] = {
-                                "ranks": [index],
-                                "url": url,
-                                "mobileUrl": mobile_url,
-                            }
-                except json.JSONDecodeError:
-                    print(f"解析 {id_value} 响应失败")
-                    failed_ids.append(id_value)
-                except Exception as e:
-                    print(f"处理 {id_value} 数据出错: {e}")
-                    failed_ids.append(id_value)
+        def _fetch_single(id_info):
+            """抓取单个平台数据"""
+            if isinstance(id_info, tuple):
+                id_value = id_info[0]
             else:
-                failed_ids.append(id_value)
+                id_value = id_info
 
-            # 请求间隔（除了最后一个）
-            if i < len(ids_list) - 1:
-                actual_interval = request_interval + random.randint(-10, 20)
-                actual_interval = max(50, actual_interval)
-                time.sleep(actual_interval / 1000)
+            response, _, _ = self.fetch_data(id_info)
+            if not response:
+                return id_value, None
+
+            try:
+                data = json.loads(response)
+                platform_results = {}
+                for index, item in enumerate(data.get("items", []), 1):
+                    title = item.get("title")
+                    if title is None or isinstance(title, float) or not str(title).strip():
+                        continue
+                    title = str(title).strip()
+                    url = item.get("url", "")
+                    mobile_url = item.get("mobileUrl", "")
+
+                    if title in platform_results:
+                        platform_results[title]["ranks"].append(index)
+                    else:
+                        platform_results[title] = {
+                            "ranks": [index],
+                            "url": url,
+                            "mobileUrl": mobile_url,
+                        }
+                return id_value, platform_results
+            except json.JSONDecodeError:
+                print(f"解析 {id_value} 响应失败")
+                return id_value, None
+            except Exception as e:
+                print(f"处理 {id_value} 数据出错: {e}")
+                return id_value, None
+
+        actual_workers = min(max_workers, len(ids_list))
+        print(f"并发爬取 {len(ids_list)} 个平台，最大并发数: {actual_workers}")
+
+        with ThreadPoolExecutor(max_workers=actual_workers) as executor:
+            future_to_id = {executor.submit(_fetch_single, id_info): id_info for id_info in ids_list}
+            for future in as_completed(future_to_id):
+                id_value, platform_results = future.result()
+                if platform_results is not None:
+                    results[id_value] = platform_results
+                else:
+                    failed_ids.append(id_value)
 
         print(f"成功: {list(results.keys())}, 失败: {failed_ids}")
         return results, id_to_name, failed_ids

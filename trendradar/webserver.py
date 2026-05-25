@@ -26,9 +26,6 @@ CONFIG_DIR = Path(os.environ.get("CONFIG_DIR", "/app/config")).resolve()
 APP_DIR = Path(os.environ.get("APP_DIR", "/app")).resolve()
 INTERESTS_FILE = CONFIG_DIR / "ai_interests.txt"
 EXTRACT_PROMPT_FILE = CONFIG_DIR / "ai_filter" / "extract_prompt.txt"
-SINGLE_WATCH_CONFIG_FILE = Path(
-    os.environ.get("SINGLE_WATCH_CONFIG_FILE", str(OUTPUT_DIR / "single_watch" / "config.json"))
-).resolve()
 
 # Ensure the app dir is importable
 if str(APP_DIR) not in sys.path:
@@ -326,99 +323,6 @@ loadInterests();
 </html>"""
 
 
-SINGLE_WATCH_HTML = r"""<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Single Watch - 智汇</title>
-<style>
-body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#f6f7f9;color:#1f2937;margin:0;padding:24px}
-.wrap{max-width:760px;margin:0 auto;background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:24px}
-h1{font-size:22px;margin:0 0 6px}.hint{color:#6b7280;margin:0 0 22px;line-height:1.6}
-label{display:block;font-weight:600;margin:16px 0 6px}
-input,textarea{width:100%;box-sizing:border-box;border:1px solid #d1d5db;border-radius:6px;padding:10px;font-size:15px}
-textarea{min-height:86px;resize:vertical}
-.check{display:flex;align-items:center;gap:8px;margin-top:16px}.check input{width:auto}.check label{margin:0}
-.row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-button{margin-top:20px;background:#0b57d0;color:#fff;border:0;border-radius:6px;padding:11px 18px;font-weight:700;cursor:pointer}
-button:disabled{opacity:.6;cursor:not-allowed}.status{margin-top:14px;padding:10px;border-radius:6px;display:none}
-.ok{display:block;background:#ecfdf3;color:#166534}.err{display:block;background:#fef2f2;color:#991b1b}
-.small{font-size:13px;color:#6b7280;margin-top:6px}
-</style>
-</head>
-<body>
-<div class="wrap">
-  <h1>网页关键词监控</h1>
-  <p class="hint">填写要监控的网页、关注主题词和收件邮箱。保存后，后台监控会在下一轮检查时自动使用新配置。</p>
-
-  <label for="watchUrl">网页链接</label>
-  <input id="watchUrl" placeholder="例如：http://finance.people.com.cn/">
-
-  <label for="keywords">关注主题词</label>
-  <textarea id="keywords" placeholder="例如：具身智能, 机器人, 人形机器人"></textarea>
-  <div class="small">多个主题词可用逗号、分号或换行分隔。</div>
-
-  <label for="emailTo">收件邮箱</label>
-  <input id="emailTo" placeholder="user@example.com">
-
-  <div class="row">
-    <div>
-      <label for="sourceName">来源名称</label>
-      <input id="sourceName" placeholder="例如：人民网经济科技">
-    </div>
-    <div>
-      <label for="interval">检查间隔（秒）</label>
-      <input id="interval" type="number" min="30" placeholder="1800">
-    </div>
-  </div>
-
-  <div class="check">
-    <input id="aiSummary" type="checkbox">
-    <label for="aiSummary">启用 AI 摘要</label>
-  </div>
-  <div class="small">需配置 AI_API_KEY；未配置时会自动退回正文摘录。</div>
-
-  <button id="saveBtn" onclick="saveConfig()">保存配置</button>
-  <div id="status" class="status"></div>
-</div>
-
-<script>
-function $(id){return document.getElementById(id)}
-function status(msg, ok){const el=$('status');el.textContent=msg;el.className='status '+(ok?'ok':'err')}
-async function loadConfig(){
-  const r=await fetch('/api/single-watch/config');
-  const d=await r.json();
-  $('watchUrl').value=d.watch_url||'';
-  $('keywords').value=Array.isArray(d.keywords)?d.keywords.join(', '):(d.keywords||'');
-  $('emailTo').value=d.email_to||'';
-  $('sourceName').value=d.source_name||'';
-  $('interval').value=d.check_interval||1800;
-  $('aiSummary').checked=d.ai_summary_enabled!==false;
-}
-async function saveConfig(){
-  const btn=$('saveBtn');btn.disabled=true;
-  try{
-    const payload={
-      watch_url:$('watchUrl').value.trim(),
-      keywords:$('keywords').value,
-      email_to:$('emailTo').value.trim(),
-      source_name:$('sourceName').value.trim(),
-      check_interval:Number($('interval').value||1800),
-      ai_summary_enabled:$('aiSummary').checked
-    };
-    const r=await fetch('/api/single-watch/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-    const d=await r.json();
-    if(!r.ok||!d.success){status(d.error||'保存失败',false)}else{status('已保存。下一轮监控会自动使用新配置。',true)}
-  }catch(e){status('请求失败：'+e.message,false)}
-  finally{btn.disabled=false}
-}
-loadConfig().catch(e=>status('加载失败：'+e.message,false));
-</script>
-</body>
-</html>"""
-
-
 def _load_interests():
     if INTERESTS_FILE.exists():
         return INTERESTS_FILE.read_text(encoding="utf-8")
@@ -566,12 +470,8 @@ class TrendRadarHandler(SimpleHTTPRequestHandler):
 
         if path == "/my_interest":
             self._serve_html(MY_INTEREST_HTML)
-        elif path == "/single_watch":
-            self._serve_html(SINGLE_WATCH_HTML)
         elif path == "/api/interests":
             self._handle_get_interests()
-        elif path == "/api/single-watch/config":
-            self._handle_get_single_watch_config()
         elif path == "/api/health":
             self._json({"status": "ok"})
         else:
@@ -588,8 +488,6 @@ class TrendRadarHandler(SimpleHTTPRequestHandler):
             self._handle_preview_tags(body)
         elif path == "/api/interests/preview-news":
             self._handle_preview_news(body)
-        elif path == "/api/single-watch/config":
-            self._handle_save_single_watch_config(body)
         else:
             self._json_error(404, "Not Found")
 
@@ -651,71 +549,6 @@ class TrendRadarHandler(SimpleHTTPRequestHandler):
             return
         result = _ai_classify_news(body.get("content", ""), tags, sample_size)
         self._json(result)
-
-    def _handle_get_single_watch_config(self):
-        data = {}
-        if SINGLE_WATCH_CONFIG_FILE.exists():
-            try:
-                data = json.loads(SINGLE_WATCH_CONFIG_FILE.read_text(encoding="utf-8"))
-            except Exception as e:
-                self._json({"error": f"Config read failed: {e}"}, status=500)
-                return
-        data.setdefault("watch_url", os.environ.get("WATCH_URL", ""))
-        data.setdefault("keywords", os.environ.get("WATCH_KEYWORDS", ""))
-        data.setdefault("email_to", os.environ.get("EMAIL_TO", ""))
-        data.setdefault("source_name", os.environ.get("WATCH_SOURCE_NAME", ""))
-        data.setdefault("check_interval", int(os.environ.get("CHECK_INTERVAL", "1800") or "1800"))
-        data.setdefault("ai_summary_enabled", os.environ.get("WATCH_AI_SUMMARY_ENABLED", "true").lower() not in {"0", "false", "no", "off"})
-        data["path"] = str(SINGLE_WATCH_CONFIG_FILE)
-        self._json(data)
-
-    def _handle_save_single_watch_config(self, body: dict):
-        watch_url = str(body.get("watch_url", "")).strip()
-        keywords_raw = body.get("keywords", "")
-        email_to = str(body.get("email_to", "")).strip()
-        source_name = str(body.get("source_name", "")).strip() or "Watch Source"
-
-        if not watch_url.startswith(("http://", "https://")):
-            self._json({"success": False, "error": "网页链接必须以 http:// 或 https:// 开头"}, status=400)
-            return
-        if "@" not in email_to or "." not in email_to.split("@")[-1]:
-            self._json({"success": False, "error": "请填写有效的收件邮箱"}, status=400)
-            return
-
-        if isinstance(keywords_raw, list):
-            keywords = [str(item).strip() for item in keywords_raw if str(item).strip()]
-        else:
-            import re
-            keywords = [item.strip() for item in re.split(r"[,;，；\n]+", str(keywords_raw)) if item.strip()]
-        if not keywords:
-            self._json({"success": False, "error": "请至少填写一个关注主题词"}, status=400)
-            return
-
-        try:
-            check_interval = int(body.get("check_interval", 1800))
-            check_interval = max(30, check_interval)
-        except (TypeError, ValueError):
-            check_interval = 1800
-
-        payload = {
-            "watch_url": watch_url,
-            "keywords": keywords,
-            "email_to": email_to,
-            "source_name": source_name,
-            "check_interval": check_interval,
-            "ai_summary_enabled": bool(body.get("ai_summary_enabled", True)),
-            "updated_at": datetime.now().isoformat(timespec="seconds"),
-        }
-
-        try:
-            SINGLE_WATCH_CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
-            SINGLE_WATCH_CONFIG_FILE.write_text(
-                json.dumps(payload, ensure_ascii=False, indent=2),
-                encoding="utf-8",
-            )
-            self._json({"success": True, "path": str(SINGLE_WATCH_CONFIG_FILE)})
-        except Exception as e:
-            self._json({"success": False, "error": str(e)}, status=500)
 
 
 def start_server(port: int = 9999):

@@ -1291,7 +1291,8 @@ class NewsAnalyzer:
                      f"interval={self.request_interval}ms, scuttling...")
 
         results, id_to_name, failed_ids = self.data_fetcher.crawl_websites(
-            ids, self.request_interval
+            ids, self.request_interval,
+            max_workers=self.ctx.config.get("CONCURRENT_CRAWLERS", 5),
         )
 
         total_items = sum(len(v) for v in results.values())
@@ -2462,16 +2463,6 @@ def main():
         help="显示当前调度状态"
     )
     parser.add_argument(
-        "--single-watch",
-        action="store_true",
-        help="single-user URL watcher; uses WATCH_URL, WATCH_KEYWORDS, and email config"
-    )
-    parser.add_argument(
-        "--single-watch-loop",
-        action="store_true",
-        help="run single-user URL watcher forever; interval comes from CHECK_INTERVAL"
-    )
-    parser.add_argument(
         "--doctor",
         action="store_true",
         help="运行环境与配置体检"
@@ -2491,16 +2482,6 @@ def main():
             ok = _run_doctor()
             if not ok:
                 raise SystemExit(1)
-            return
-
-        # 先加载配置
-        if args.single_watch or args.single_watch_loop:
-            from trendradar.single_watch import run_single_watch, run_single_watch_loop
-
-            if args.single_watch_loop:
-                run_single_watch_loop()
-            else:
-                run_single_watch()
             return
 
         config = load_config()

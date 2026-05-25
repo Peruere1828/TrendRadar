@@ -1,3 +1,12 @@
+关于项目，这是一个新闻追踪系统，带ai摘要整理，最终会发布简报到用户邮箱。涉及的容器为：
+
+2934b1c8b3b4   docker-trendradar               "/entrypoint.sh"          3 days ago     Up 3 days                  0.0.0.0:9999->9999/tcp                                 docker-trendradar-1
+3497a637c167   wantcat/trendradar-mcp:latest   "/bin/sh -c 'sh -c \"…"   3 days ago     Up 3 days                  3333/tcp, 127.0.0.1:3334->3334/tcp                     docker-trendradar-mcp-1
+
+每次调整代码后你需要帮我rebuild容器&restart容器。
+
+如果你需要pip install，请在conda activate testenv中使用
+
 # CLAUDE.md
 
 Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-specific instructions as needed.
