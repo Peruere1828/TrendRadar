@@ -17,6 +17,18 @@ from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import urlparse
 
+import yaml
+
+from trendradar.web_pages import (
+    home_page,
+    dashboard,
+    platforms_page,
+    rss_page,
+    filter_page,
+    notification_page,
+    ai_page,
+)
+
 logging.basicConfig(level=logging.INFO, format="[WebServer] %(message)s")
 logger = logging.getLogger(__name__)
 
@@ -26,6 +38,9 @@ CONFIG_DIR = Path(os.environ.get("CONFIG_DIR", "/app/config")).resolve()
 APP_DIR = Path(os.environ.get("APP_DIR", "/app")).resolve()
 INTERESTS_FILE = CONFIG_DIR / "ai_interests.txt"
 EXTRACT_PROMPT_FILE = CONFIG_DIR / "ai_filter" / "extract_prompt.txt"
+CONFIG_FILE = CONFIG_DIR / "config.yaml"
+KEYWORDS_FILE = CONFIG_DIR / "frequency_words.txt"
+VERSION_FILE = APP_DIR / "version"
 
 # Ensure the app dir is importable
 if str(APP_DIR) not in sys.path:
@@ -455,6 +470,71 @@ def _load_recent_news(limit: int = 40) -> list:
         return []
 
 
+# ---- Config helpers ----
+
+def _load_config() -> dict:
+    if CONFIG_FILE.exists():
+        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+            return yaml.safe_load(f) or {}
+    return {}
+
+
+def _save_config(config: dict):
+    with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+        yaml.dump(config, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
+
+
+def _load_keywords() -> str:
+    if KEYWORDS_FILE.exists():
+        return KEYWORDS_FILE.read_text(encoding="utf-8")
+    return ""
+
+
+def _save_keywords(content: str):
+    KEYWORDS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    KEYWORDS_FILE.write_text(content, encoding="utf-8")
+
+
+def _get_version() -> str:
+    if VERSION_FILE.exists():
+        return VERSION_FILE.read_text(encoding="utf-8").strip()
+    return "?"
+
+
+def _get_system_status() -> dict:
+    cfg = _load_config()
+    data = {}
+    try:
+        news_dir = OUTPUT_DIR / "news"
+        if news_dir.exists():
+            db_files = list(news_dir.glob("*.db"))
+            data["available_dates"] = len(db_files)
+            if db_files:
+                latest = sorted(db_files)[-1]
+                data["latest_date"] = latest.stem
+            else:
+                data["latest_date"] = "-"
+        else:
+            data["available_dates"] = 0
+            data["latest_date"] = "-"
+        storage_files = 0
+        for subdir in ["news", "rss", "html"]:
+            d = OUTPUT_DIR / subdir
+            if d.exists():
+                storage_files += len(list(d.rglob("*")))
+        data["storage_files"] = storage_files
+    except Exception as e:
+        logger.error("Status gather failed: %s", e)
+        data["available_dates"] = 0
+        data["latest_date"] = "-"
+        data["storage_files"] = 0
+    return {
+        "config": cfg,
+        "data": data,
+        "version": _get_version(),
+    }
+
+
 # ---- HTTP Handler ----
 class TrendRadarHandler(SimpleHTTPRequestHandler):
 
@@ -468,12 +548,64 @@ class TrendRadarHandler(SimpleHTTPRequestHandler):
         parsed = urlparse(self.path)
         path = parsed.path
 
-        if path == "/my_interest":
+        # Page routes
+        if path == "/":
+            self._serve_html(home_page())
+        elif path == "/dashboard":
+            self._serve_html(dashboard(_get_system_status()))
+        elif path == "/platforms":
+            self._serve_html(platforms_page())
+        elif path == "/rss":
+            self._serve_html(rss_page())
+        elif path in ("/filter", "/keywords"):
+            self._serve_html(filter_page())
+        elif path == "/notification":
+            self._serve_html(notification_page())
+        elif path == "/ai":
+            self._serve_html(ai_page())
+        elif path == "/my_interest":
             self._serve_html(MY_INTEREST_HTML)
+        # API routes
+        elif path == "/api/status":
+            self._json(_get_system_status())
+        elif path == "/api/config/platforms":
+            cfg = _load_config()
+            self._json({"sources": cfg.get("platforms", {}).get("sources", [])})
+        elif path == "/api/config/rss":
+            cfg = _load_config()
+            self._json({"feeds": cfg.get("rss", {}).get("feeds", [])})
+        elif path == "/api/keywords":
+            self._json({"content": _load_keywords(), "path": str(KEYWORDS_FILE)})
+        elif path == "/api/config/notification":
+            cfg = _load_config()
+            notif = cfg.get("notification", {})
+            self._json({"enabled": notif.get("enabled", True), "email": notif.get("channels", {}).get("email", {})})
+        elif path == "/api/config/ai":
+            cfg = _load_config()
+            ai = cfg.get("ai", {})
+            self._json({
+                "model": ai.get("model", ""),
+                "api_key": ai.get("api_key", ""),
+                "api_base": ai.get("api_base", ""),
+                "timeout": ai.get("timeout", 120),
+                "max_tokens": ai.get("max_tokens", 5000),
+                "temperature": ai.get("temperature", 1.0),
+                "ai_analysis_enabled": cfg.get("ai_analysis", {}).get("enabled", False),
+                "ai_translation_enabled": cfg.get("ai_translation", {}).get("enabled", False),
+                "filter_method": cfg.get("filter", {}).get("method", "keyword"),
+                "article_content_enabled": cfg.get("article_content", {}).get("enabled", False),
+            })
         elif path == "/api/interests":
             self._handle_get_interests()
         elif path == "/api/health":
             self._json({"status": "ok"})
+        elif path == "/files":
+            saved = self.path
+            self.path = "/"
+            try:
+                super().do_GET()
+            finally:
+                self.path = saved
         else:
             super().do_GET()
 
@@ -488,6 +620,16 @@ class TrendRadarHandler(SimpleHTTPRequestHandler):
             self._handle_preview_tags(body)
         elif path == "/api/interests/preview-news":
             self._handle_preview_news(body)
+        elif path == "/api/config/platforms":
+            self._handle_save_platforms(body)
+        elif path == "/api/config/rss":
+            self._handle_save_rss(body)
+        elif path == "/api/keywords":
+            self._handle_save_keywords(body)
+        elif path == "/api/config/notification":
+            self._handle_save_notification(body)
+        elif path == "/api/config/ai":
+            self._handle_save_ai(body)
         else:
             self._json_error(404, "Not Found")
 
@@ -550,11 +692,84 @@ class TrendRadarHandler(SimpleHTTPRequestHandler):
         result = _ai_classify_news(body.get("content", ""), tags, sample_size)
         self._json(result)
 
+    def _handle_save_platforms(self, body: dict):
+        sources = body.get("sources")
+        if sources is None:
+            self._json({"success": False, "error": "sources required"}, status=400)
+            return
+        try:
+            cfg = _load_config()
+            cfg.setdefault("platforms", {})["sources"] = sources
+            _save_config(cfg)
+            self._json({"success": True})
+        except Exception as e:
+            self._json({"success": False, "error": str(e)}, status=500)
+
+    def _handle_save_rss(self, body: dict):
+        feeds = body.get("feeds")
+        if feeds is None:
+            self._json({"success": False, "error": "feeds required"}, status=400)
+            return
+        try:
+            cfg = _load_config()
+            cfg.setdefault("rss", {})["feeds"] = feeds
+            _save_config(cfg)
+            self._json({"success": True})
+        except Exception as e:
+            self._json({"success": False, "error": str(e)}, status=500)
+
+    def _handle_save_keywords(self, body: dict):
+        content = body.get("content", "")
+        if not content.strip():
+            self._json({"success": False, "error": "Content cannot be empty"}, status=400)
+            return
+        try:
+            _save_keywords(content)
+            self._json({"success": True, "path": str(KEYWORDS_FILE)})
+        except Exception as e:
+            self._json({"success": False, "error": str(e)}, status=500)
+
+    def _handle_save_notification(self, body: dict):
+        try:
+            cfg = _load_config()
+            notif = cfg.setdefault("notification", {})
+            notif["enabled"] = body.get("enabled", True)
+            email = body.get("email", {})
+            channels = notif.setdefault("channels", {})
+            channels["email"] = {
+                "from": email.get("from", ""),
+                "password": email.get("password", ""),
+                "to": email.get("to", ""),
+                "smtp_server": email.get("smtp_server", ""),
+                "smtp_port": email.get("smtp_port", ""),
+            }
+            _save_config(cfg)
+            self._json({"success": True})
+        except Exception as e:
+            self._json({"success": False, "error": str(e)}, status=500)
+
+    def _handle_save_ai(self, body: dict):
+        try:
+            cfg = _load_config()
+            ai = cfg.setdefault("ai", {})
+            for key in ("model", "api_key", "api_base", "timeout", "max_tokens", "temperature"):
+                if key in body:
+                    ai[key] = body[key]
+            cfg.setdefault("ai_analysis", {})["enabled"] = body.get("ai_analysis_enabled", True)
+            cfg.setdefault("ai_translation", {})["enabled"] = body.get("ai_translation_enabled", True)
+            cfg.setdefault("filter", {})["method"] = body.get("filter_method", "keyword")
+            cfg.setdefault("article_content", {})["enabled"] = body.get("article_content_enabled", False)
+            _save_config(cfg)
+            self._json({"success": True})
+        except Exception as e:
+            self._json({"success": False, "error": str(e)}, status=500)
+
 
 def start_server(port: int = 9999):
     server = ThreadingHTTPServer(("0.0.0.0", port), TrendRadarHandler)
     logger.info("TrendRadar WebServer started on port %d", port)
-    logger.info("  Static: http://0.0.0.0:%d/", port)
+    logger.info("  Dashboard: http://0.0.0.0:%d/", port)
+    logger.info("  Platforms: http://0.0.0.0:%d/platforms", port)
     logger.info("  Interests: http://0.0.0.0:%d/my_interest", port)
     try:
         server.serve_forever()
