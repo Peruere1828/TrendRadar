@@ -1,120 +1,116 @@
-# 网页主题监控与 TrendRadar 集成服务
+# 智汇 TrendRadar
 
-这个仓库基于 TrendRadar 的抓取、存储、报告和通知能力整理而来。当前项目保留原有热点聚合、RSS、AI 分析、MCP 查询等能力，同时把重点放在一个更直接的业务目标上：
+智汇 TrendRadar 是一个新闻聚合、筛选、报告和通知服务。它从热榜平台和 RSS 源抓取资讯，按关键词或 AI 兴趣描述筛选重点内容，生成 HTML 报告，并通过邮件、飞书、钉钉、企业微信、Telegram、ntfy、Bark、Slack 等渠道推送。
 
-> 用户提交网页链接、关注主题词和邮箱；系统定时检查网页更新，发现新增且命中主题词的文章后，抓取正文并通过邮件通知用户。
+## 功能
 
-## 当前重点
+- 热榜平台抓取：通过 `config/config.yaml` 配置平台来源。
+- RSS 聚合：支持 RSS/Atom 订阅源抓取和报告展示。
+- 关键词筛选：使用 `config/frequency_words.txt` 做分组关键词匹配。
+- AI 筛选：使用 `config/ai_interests.txt` 的自然语言兴趣描述生成标签并分类资讯。
+- AI 分析与翻译：基于 LiteLLM 接入模型服务。
+- 正文抓取：为命中的热榜/RSS 文章抓取正文摘录，并写入报告。
+- 多渠道通知：统一生成报告后发送到已配置渠道。
+- Web 管理页：查看状态、管理平台/RSS/筛选/通知/AI 配置。
+- MCP 服务：供 AI 客户端查询和分析历史数据。
 
-- **单网页监控**：监控指定页面、RSS 或人民网栏目。
-- **主题词匹配**：只通知与用户关注主题相关的新增文章。
-- **正文抓取**：发现新文章后尽量抓取正文内容。
-- **邮件通知**：将新增文章标题、链接和正文整理成 HTML 邮件发送。
-- **Docker 部署**：支持容器内定时运行，也支持服务器端口配置。
-
-## 保留能力
-
-项目仍保留以下原有能力，后续可以按需要启用：
-
-- 多平台热点聚合
-- RSS 聚合
-- AI 分析、AI 翻译、AI 筛选
-- 多通知渠道：邮件、飞书、钉钉、企业微信、Telegram、ntfy、Bark、Slack 等
-- 本地 SQLite 与 S3 兼容远程存储
-- MCP 服务，用于让 AI 客户端查询和分析历史数据
-
-## 最相关的代码
+## 目录
 
 ```text
-trendradar/single_watch.py                  # 单网页监控主逻辑
-trendradar/crawler/article_content.py       # 文章正文抓取
-trendradar/crawler/people_cn.py             # 人民网栏目抓取
-trendradar/notification/senders.py          # 邮件等通知发送
-docker/docker-compose.single-watch.yml      # 单网页监控容器配置
-docker/.env                                 # 部署环境变量
-output/single_watch/                        # 单网页监控状态和邮件 HTML
+trendradar/              # 主程序代码
+mcp_server/              # MCP 查询分析服务
+config/                  # 运行配置、关键词、AI 提示词
+docker/                  # Docker 镜像、Compose、入口脚本
+docs/                    # 项目说明和静态文档站点
+output/                  # 运行产物，本地生成，不提交到仓库
+_image/                  # 文档图片素材
 ```
 
-## 单网页监控配置
+## 关键模块
+
+```text
+trendradar/__main__.py                    # CLI 和主流程入口
+trendradar/context.py                     # 抓取、筛选、分析、通知编排
+trendradar/webserver.py                   # Web 管理服务和 API
+trendradar/web_pages.py                   # Web 管理页面模板
+trendradar/crawler/fetcher.py             # 热榜抓取入口
+trendradar/crawler/rss/                   # RSS 抓取与解析
+trendradar/crawler/article_content.py     # 文章正文抓取
+trendradar/ai/                            # AI 客户端、分析、筛选、翻译
+trendradar/report/                        # 报告数据与 HTML 渲染
+trendradar/notification/                  # 通知内容渲染和发送
+trendradar/storage/                       # 本地 SQLite 与 S3 兼容远程存储
+```
+
+## 配置
+
+主要配置文件：
+
+```text
+config/config.yaml              # 平台、RSS、通知、AI、存储、正文抓取等主配置
+config/timeline.yaml            # 调度时间线
+config/frequency_words.txt      # 关键词分组
+config/ai_interests.txt         # AI 兴趣描述
+config/ai_filter/               # AI 筛选提示词
+docker/.env.example             # Docker 环境变量示例
+```
+
+本地部署时复制一份环境变量文件：
+
+```bash
+cp docker/.env.example docker/.env
+```
 
 常用环境变量：
 
 ```env
-WATCH_URL=https://finance.people.com.cn/
-WATCH_KEYWORDS=具身智能,机器人,人工智能
-EMAIL_FROM=your_sender@example.com
-EMAIL_PASSWORD=your_email_password_or_app_password
-EMAIL_TO=user@example.com
-EMAIL_SMTP_SERVER=smtp.example.com
-EMAIL_SMTP_PORT=465
-CHECK_INTERVAL=1800
-```
+WEBSERVER_PORT=9999
+RUN_MODE=cron
+IMMEDIATE_RUN=true
 
-说明：
+EMAIL_FROM=
+EMAIL_PASSWORD=
+EMAIL_TO=
+EMAIL_SMTP_SERVER=
+EMAIL_SMTP_PORT=
 
-- `WATCH_URL` 是要监控的网页或 RSS 地址。
-- `WATCH_KEYWORDS` 支持逗号、分号或换行分隔。
-- `EMAIL_FROM` 和 `EMAIL_PASSWORD` 是发信邮箱配置。
-- `EMAIL_TO` 是收信邮箱。
-- `CHECK_INTERVAL` 是检查间隔，单位秒。
+AI_API_KEY=
+AI_MODEL=
+AI_API_BASE=
 
-## 主流程正文抓取
-
-`cron/once` 主流程也支持文章正文抓取。开启后，系统会在生成 HTML 报告前，为命中的热榜/RSS 文章抓取正文；邮件通知使用同一份 HTML，因此邮件中也会包含正文摘录。
-
-在 `docker/.env` 中开启：
-
-```env
-ARTICLE_CONTENT_ENABLED=true
+ARTICLE_CONTENT_ENABLED=false
 ARTICLE_CONTENT_ONLY_NEW=true
 ARTICLE_CONTENT_MAX_ARTICLES=10
-ARTICLE_CONTENT_MAX_CHARS=4000
 ARTICLE_CONTENT_USE_JINA=true
 JINA_API_KEY=
 ```
 
-说明：
-
-- `ARTICLE_CONTENT_ONLY_NEW=true` 表示只抓本轮新增命中文章，适合邮件通知。
-- `ARTICLE_CONTENT_ONLY_NEW=false` 表示抓报告里的命中文章，可能更慢。
-- `ARTICLE_CONTENT_MAX_ARTICLES` 用来限制每轮最多抓几篇，避免定时任务跑太久。
-- `ARTICLE_CONTENT_USE_JINA=true` 会优先用 Jina Reader 抽正文，失败后回退到本地 HTML 解析。
-
-## 单网页监控 AI 摘要
-
-单网页监控会先抓取文章正文，再尝试生成 AI 摘要。邮件中会优先展示“AI 摘要”，再展示“正文摘录”。如果未配置 `AI_API_KEY`，系统会自动跳过 AI 摘要，继续发送正文摘录。
-
-```env
-WATCH_AI_SUMMARY_ENABLED=true
-AI_API_KEY=your_ai_api_key
-AI_MODEL=deepseek/deepseek-chat
-AI_API_BASE=
-WATCH_AI_SUMMARY_MAX_INPUT_CHARS=6000
-WATCH_AI_SUMMARY_MAX_TOKENS=700
-```
+`docker/.env` 是本地私有配置文件，不提交到仓库。
 
 ## 本地运行
 
-```bash
-python -m trendradar --single-watch
-```
-
-循环监控：
+安装依赖后执行主流程：
 
 ```bash
-python -m trendradar --single-watch-loop
+python -m trendradar
 ```
 
-测试邮件通知：
+查看调度状态：
 
 ```bash
-python -m trendradar --test-notification
+python -m trendradar --show-schedule
 ```
 
-配置体检：
+运行配置体检：
 
 ```bash
 python -m trendradar --doctor
+```
+
+测试通知渠道：
+
+```bash
+python -m trendradar --test-notification
 ```
 
 ## Docker 运行
@@ -125,19 +121,13 @@ python -m trendradar --doctor
 cd docker
 ```
 
-单网页监控：
-
-```bash
-docker compose -f docker-compose.single-watch.yml up -d
-```
-
-完整服务：
+使用现有镜像运行：
 
 ```bash
 docker compose up -d
 ```
 
-本地构建：
+本地构建运行：
 
 ```bash
 docker compose -f docker-compose-build.yml up -d --build
@@ -149,31 +139,46 @@ docker compose -f docker-compose-build.yml up -d --build
 docker compose -f docker-compose.server.yml up -d
 ```
 
-当前服务器端口约定：
+默认访问地址：
 
-- Web：`7000`
-- MCP：`7001`
+```text
+Web: http://localhost:9999
+MCP: http://127.0.0.1:3334/mcp
+```
 
-服务器容器名：
+`docker-compose.server.yml` 约定：
 
-- 主服务：`trendradar-jjy`
-- MCP 服务：`trendradar-mcp-jjy`
+```text
+Web: http://服务器地址:7000
+MCP: http://127.0.0.1:3335/mcp
+```
 
-## 项目结构
+## Web 管理页
 
-详细结构说明见：
+Web 服务由 `trendradar/webserver.py` 提供，页面包括：
 
-[项目结构说明](docs/项目结构说明.md)
+```text
+/              首页
+/dashboard     系统状态
+/platforms     平台源配置
+/rss           RSS 源配置
+/filter        关键词和 AI 兴趣筛选配置
+/notification  通知配置
+/ai            AI 配置
+/my_interest   AI 兴趣描述配置
+/files         输出文件浏览
+```
 
-## 后续重构方向
+对应 API 会直接读写 `config/config.yaml`、`config/frequency_words.txt` 和 `config/ai_interests.txt`。
 
-目前先保留完整功能，避免破坏已有能力。后续建议逐步做这些整理：
+## 运行产物
 
-1. 把 `trendradar/__main__.py` 拆成更小的 CLI、运行器和诊断模块。
-2. 把 `trendradar/single_watch.py` 中仍有价值的普通网页链接发现能力，逐步合并进主流程的数据源层。
-3. 把邮件通知从多渠道通知中抽成更清晰的邮箱模块。
-4. 增加多用户任务表、网页表单、任务启停和任务状态页面。
+`output/` 存放数据库、HTML 报告等运行产物。该目录不提交到仓库，部署时建议挂载到宿主机或持久化存储。
 
-## 文档入口
+## MCP
 
-根目录中几个 `README-*` 文件现在都作为当前项目的说明或索引使用。需要理解项目时，以本文件和 `docs/项目结构说明.md` 为准。
+MCP 服务位于 `mcp_server/`，用于让 AI 客户端查询历史新闻、读取文章、分析趋势、检查系统状态和触发部分管理操作。MCP 不是主流程运行的必要条件。
+
+更多结构说明见：
+
+[docs/项目结构说明.md](docs/项目结构说明.md)

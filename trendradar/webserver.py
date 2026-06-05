@@ -60,7 +60,7 @@ MY_INTEREST_HTML = r"""<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>My Interest - 智汇</title>
+<title>智汇 - 关注主题配置</title>
 <style>
 :root {
   --bg: #1a1a2e; --card: #16213e; --card2: #0f3460;
@@ -147,25 +147,25 @@ textarea:focus { outline: none; border-color: var(--accent); }
 </head>
 <body>
 <div class="container">
-  <h1>我的兴趣配置</h1>
-  <p class="subtitle">用自然语言描述你关注的话题，AI 自动提取标签并分类新闻。修改后将在下次调度运行时生效。</p>
+  <h1>智汇关注主题配置</h1>
+  <p class="subtitle">用自然语言描述关注的行业方向，智汇会调用 AI 抽取主题标签，并用于后续资讯分类、摘要和简报推送。</p>
 
   <div class="card">
-    <h2>兴趣描述</h2>
-    <textarea id="interestsInput" placeholder="描述你关注的话题..."></textarea>
+    <h2>行业关注描述</h2>
+    <textarea id="interestsInput" placeholder="例如：关注车路云协同、算力基础设施、人工智能政策、具身智能和机器人商业化进展。"></textarea>
     <div class="btn-row">
-      <button class="btn btn-primary" id="btnSave" onclick="saveInterests()">保存</button>
-      <button class="btn btn-secondary" id="btnPreview" onclick="previewTags()">AI 预览标签</button>
+      <button class="btn btn-primary" id="btnSave" onclick="saveInterests()">保存主题</button>
+      <button class="btn btn-secondary" id="btnPreview" onclick="previewTags()">AI 生成标签</button>
       <button class="btn btn-outline" id="btnReset" onclick="loadInterests()">重新加载</button>
     </div>
     <div id="status" class="status"></div>
   </div>
 
   <div class="card" id="tagsCard" style="display:none;">
-    <h2>AI 提取的标签 <span style="font-weight:400;font-size:0.8rem;color:var(--text2);">（拖拽调整优先级）</span></h2>
+    <h2>AI 提取的行业标签 <span style="font-weight:400;font-size:0.8rem;color:var(--text2);">(可拖拽调整优先级)</span></h2>
     <div class="tag-list" id="tagList"></div>
     <div class="news-sample" id="newsSample" style="display:none;">
-      <h2 style="margin-bottom:12px;">新闻样本：<span id="newsSampleTitle"></span></h2>
+      <h2 style="margin-bottom:12px;">相关资讯样例：<span id="newsSampleTitle"></span></h2>
       <div id="newsList"></div>
     </div>
   </div>
@@ -189,13 +189,13 @@ async function loadInterests() {
     const d = await r.json();
     $('interestsInput').value = d.content || '';
   } catch(e) {
-    showStatus('加载失败： ' + e.message, 'error');
+    showStatus('加载失败：' + e.message, 'error');
   }
 }
 
 async function saveInterests() {
   const btn = $('btnSave');
-  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Saving...';
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> 保存中...';
   try {
     const content = $('interestsInput').value;
     const r = await fetch('/api/interests', {
@@ -205,24 +205,24 @@ async function saveInterests() {
     });
     const d = await r.json();
     if (d.success) {
-      showStatus('已保存，将在下次运行时生效。', 'success');
+      showStatus('已保存，下一轮智汇资讯分析会自动使用新主题。', 'success');
     } else {
-      showStatus('保存失败：' + (d.error || '未知错误'), 'error');
+      showStatus('保存失败：' + (d.error || 'unknown'), 'error');
     }
   } catch(e) {
     showStatus('请求失败：' + e.message, 'error');
   } finally {
-    btn.disabled = false; btn.innerHTML = 'Save';
+    btn.disabled = false; btn.innerHTML = '保存主题';
   }
 }
 
 async function previewTags() {
   const btn = $('btnPreview');
-  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Extracting...';
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> 生成中...';
   $('newsSample').style.display = 'none';
   try {
     const content = $('interestsInput').value;
-    if (!content.trim()) { showStatus('请先输入兴趣描述', 'error'); return; }
+    if (!content.trim()) { showStatus('请先填写行业关注描述', 'error'); return; }
     const r = await fetch('/api/interests/preview', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
@@ -230,17 +230,17 @@ async function previewTags() {
     });
     const d = await r.json();
     if (d.error) {
-      showStatus('AI 提取失败：' + d.error, 'error');
+      showStatus('AI 标签生成失败：' + d.error, 'error');
     } else {
       currentTags = d.tags || [];
       renderTags();
       $('tagsCard').style.display = 'block';
-      showStatus('AI 已提取 ' + currentTags.length + ' 个标签', 'success');
+      showStatus('AI 已生成 ' + currentTags.length + ' 个行业标签', 'success');
     }
   } catch(e) {
     showStatus('请求失败：' + e.message, 'error');
   } finally {
-    btn.disabled = false; btn.innerHTML = 'AI Preview Tags';
+    btn.disabled = false; btn.innerHTML = 'AI 生成标签';
   }
 }
 
@@ -260,7 +260,7 @@ function renderTags() {
     '<div class="tag-desc">' + escHtml(t.description || '') + '</div>' +
     '</div>' +
     '<div class="tag-actions">' +
-    '<button onclick="previewNews(' + i + ')">查看样本</button>' +
+    '<button onclick="previewNews(' + i + ')">查看样例</button>' +
     '</div></div>'
   ).join('');
 }
@@ -300,7 +300,7 @@ async function previewNews(tagIdx) {
   const tag = currentTags[tagIdx];
   $('newsSample').style.display = 'block';
   $('newsSampleTitle').textContent = '"' + tag.tag + '"';
-  $('newsList').innerHTML = '<div class="empty-state"><span class="spinner"></span> AI 分类中...</div>';
+  $('newsList').innerHTML = '<div class="empty-state"><span class="spinner"></span> AI 正在匹配资讯...</div>';
   try {
     const content = $('interestsInput').value;
     const r = await fetch('/api/interests/preview-news', {
@@ -312,7 +312,7 @@ async function previewNews(tagIdx) {
     if (d.error) {
       $('newsList').innerHTML = '<div class="empty-state">' + escHtml(d.error) + '</div>';
     } else if (!d.results || !d.results.length) {
-      $('newsList').innerHTML = '<div class="empty-state">未找到匹配的新闻样本</div>';
+      $('newsList').innerHTML = '<div class="empty-state">暂未找到匹配的资讯样例</div>';
     } else {
       $('newsList').innerHTML = d.results.map((item, i) =>
         '<div class="news-item">' +
@@ -324,7 +324,7 @@ async function previewNews(tagIdx) {
       ).join('');
     }
   } catch(e) {
-    $('newsList').innerHTML = '<div class="empty-state">Request failed: ' + escHtml(e.message) + '</div>';
+    $('newsList').innerHTML = '<div class="empty-state">请求失败：' + escHtml(e.message) + '</div>';
   }
 }
 
@@ -613,6 +613,8 @@ class TrendRadarHandler(SimpleHTTPRequestHandler):
         parsed = urlparse(self.path)
         path = parsed.path
         body = self._read_body()
+        if body is None:
+            return
 
         if path == "/api/interests":
             self._handle_save_interests(body)
@@ -633,15 +635,16 @@ class TrendRadarHandler(SimpleHTTPRequestHandler):
         else:
             self._json_error(404, "Not Found")
 
-    def _read_body(self) -> dict:
+    def _read_body(self) -> dict | None:
         try:
             length = int(self.headers.get("Content-Length", 0))
             if length == 0:
                 return {}
             raw = self.rfile.read(length).decode("utf-8")
             return json.loads(raw)
-        except json.JSONDecodeError:
-            return {}
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            self._json_error(400, "Invalid JSON body")
+            return None
 
     def _serve_html(self, html: str):
         self.send_response(200)

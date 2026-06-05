@@ -1,8 +1,8 @@
 # MCP 说明
 
-MCP 不是当前“网页更新后发邮件”需求的主路径，但项目仍然保留 MCP 服务，方便后续让 AI 客户端查询和分析已抓取的数据。
+MCP 服务用于让 AI 客户端查询和分析 TrendRadar 已抓取的数据。主流程不依赖 MCP；主流程负责抓取、筛选、报告和通知，MCP 负责对已有数据提供工具化访问。
 
-## MCP 在本项目里的定位
+## 目录
 
 ```text
 mcp_server/
@@ -12,51 +12,47 @@ mcp_server/
   utils/                  # 参数校验、日期解析、错误类型
 ```
 
-MCP 适合做这些事：
+## 能力
 
-- 查询历史新闻数据。
-- 根据关键词、日期或来源分析趋势。
-- 读取已抓取文章。
+- 查询已抓取新闻。
+- 按日期、来源、关键词检索数据。
+- 读取文章内容。
+- 分析趋势、共现词、平台活跃度和相似新闻。
 - 检查系统状态。
-- 触发部分管理或同步操作。
+- 管理部分配置和存储同步任务。
 
-## 什么时候不需要 MCP
-
-如果你只需要：
-
-- 用户提交网页链接。
-- 用户填写主题词。
-- 用户留下邮箱。
-- 网页有新增相关文章时发送邮件。
-
-那么优先关注：
-
-```text
-trendradar/single_watch.py
-trendradar/crawler/article_content.py
-trendradar/notification/senders.py
-docker/docker-compose.single-watch.yml
-```
-
-## Docker 启动 MCP
+## Docker 启动
 
 ```bash
 cd docker
 docker compose up -d trendradar-mcp
 ```
 
-服务器约定端口：
+默认本地地址：
 
 ```text
-http://服务器地址:3335/mcp
+http://127.0.0.1:3334/mcp
 ```
 
-本地默认端口通常是：
+服务器端口版本：
+
+```bash
+docker compose -f docker-compose.server.yml up -d trendradar-mcp
+```
+
+服务器 compose 内部约定：
 
 ```text
-http://127.0.0.1:3333/mcp
+http://127.0.0.1:3335/mcp
 ```
 
-## 后续整理建议
+## 与主流程的关系
 
-后续如果继续重构，建议把 `mcp_server/` 迁入更清晰的 `trendradar/mcp/` 或保持独立包，但需要在文档里明确它是“查询分析服务”，不是网页监控主流程。
+主流程入口是：
+
+```text
+trendradar/__main__.py
+trendradar/context.py
+```
+
+MCP 读取主流程产生的数据和配置，不负责定时抓取，也不负责发送通知。

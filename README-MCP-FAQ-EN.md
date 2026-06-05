@@ -1,16 +1,45 @@
 # MCP Notes
 
-MCP is retained for AI-client data query and analysis workflows. It is not required for the current web page monitoring and email notification flow.
+The MCP server gives AI clients tool-based access to TrendRadar data. The main workflow handles collection, filtering, reporting, and notifications; MCP is an optional query and analysis layer over the generated data.
 
-For the current requirement, focus on:
+## Layout
 
 ```text
-trendradar/single_watch.py
-trendradar/crawler/article_content.py
-trendradar/notification/senders.py
-docker/docker-compose.single-watch.yml
+mcp_server/
+  server.py
+  tools/
+  services/
+  utils/
 ```
 
-Use the Chinese MCP document as the main reference:
+## Capabilities
 
-[MCP 说明](README-MCP-FAQ.md)
+- Query collected news.
+- Search by date, source, and keywords.
+- Read article content.
+- Analyze trends, co-occurrence, platform activity, and similar news.
+- Check system status.
+- Manage selected configuration and storage sync tasks.
+
+## Docker
+
+```bash
+cd docker
+docker compose up -d trendradar-mcp
+```
+
+Default local endpoint:
+
+```text
+http://127.0.0.1:3334/mcp
+```
+
+Server compose endpoint:
+
+```text
+http://127.0.0.1:3335/mcp
+```
+
+Chinese documentation is the primary reference:
+
+[README-MCP-FAQ.md](README-MCP-FAQ.md)

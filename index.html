@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>热点新闻分析</title>
+    <title>智汇行业资讯简报</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" integrity="sha512-BNaRQnYJYiPSqHHDb58B0yaPfCu+Wgds8Gp/gU33kqBtgNS4tSPHuGibyoeqMV/TJlSKda6FXzoEyYGjTe+vXA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <style>
         * {
@@ -338,18 +338,18 @@
                 <button class="save-btn" onclick="saveAsImage()">保存为图片</button>
                 <button class="save-btn" onclick="saveAsMultipleImages()">分段保存</button>
             </div>
-            <div class="header-title">热点新闻分析</div>
+            <div class="header-title">智汇行业资讯简报</div>
             <div class="header-info">
                 <div class="info-item">
                     <span class="info-label">报告类型</span>
-                    <span class="info-value">当日汇总</span>
+                    <span class="info-value">行业监测</span>
                 </div>
                 <div class="info-item">
-                    <span class="info-label">新闻总数</span>
+                    <span class="info-label">资讯总数</span>
                     <span class="info-value">387 条</span>
                 </div>
                 <div class="info-item">
-                    <span class="info-label">热点新闻</span>
+                    <span class="info-label">重点资讯</span>
                     <span class="info-value">5 条</span>
                 </div>
                 <div class="info-item">
@@ -493,9 +493,9 @@
 
         <div class="footer">
             <div class="footer-content">
-                由 <span class="project-name">TrendRadar</span> 生成 · 
+                由 <span class="project-name">智汇</span> 生成 · 
                 <a href="https://github.com/sansan0/TrendRadar" target="_blank" class="footer-link">
-                    GitHub 开源项目
+                    行业资讯自动化采集与智能发布平台
                 </a>
             </div>
         </div>
@@ -543,7 +543,7 @@
                 
                 const link = document.createElement('a');
                 const now = new Date();
-                const filename = `TrendRadar_热点新闻分析_${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}.png`;
+                const filename = `智汇_行业资讯简报_${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}.png`;
                 
                 link.download = filename;
                 link.href = canvas.toDataURL('image/png', 1.0);
@@ -708,7 +708,7 @@
                 buttons.style.visibility = 'visible';
                 
                 const now = new Date();
-                const baseFilename = `TrendRadar_热点新闻分析_${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
+                const baseFilename = `智汇_行业资讯简报_${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
                 
                 for (let i = 0; i < images.length; i++) {
                     const link = document.createElement('a');

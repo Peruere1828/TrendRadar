@@ -1,37 +1,42 @@
-# Cherry Studio / MCP 接入说明
+# Cherry Studio / MCP 接入
 
-这个文件只保留当前项目需要的最小说明。Cherry Studio 这类 MCP 客户端可以连接本项目的 MCP 服务，用来查询和分析已抓取的数据。
+Cherry Studio 可以通过 MCP 连接 TrendRadar，用来查询、读取和分析已抓取的数据。抓取、筛选、报告和通知仍由 TrendRadar 主流程执行。
 
-如果你的目标只是“网页有新增相关文章就发邮件”，不需要配置 Cherry Studio。
-
-## 启动 MCP 服务
+## 启动 MCP
 
 ```bash
 cd docker
 docker compose up -d trendradar-mcp
 ```
 
-本地地址：
+默认本地地址：
 
 ```text
-http://127.0.0.1:3333/mcp
+http://127.0.0.1:3334/mcp
 ```
 
-服务器地址按当前约定：
+服务器端口版本：
 
 ```text
-http://服务器地址:3335/mcp
+http://127.0.0.1:3335/mcp
 ```
 
-## 推荐关注
+## 推荐使用场景
 
-当前网页监控主流程仍然是：
+- 查询历史新闻。
+- 按关键词、日期、平台检索。
+- 读取已抓取文章内容。
+- 让 AI 客户端生成趋势分析或摘要。
+- 检查系统状态。
+
+## 主流程
 
 ```text
-用户提交链接、主题词、邮箱
-  -> single_watch.py 定时检查
-  -> article_content.py 抓正文
-  -> senders.py 发邮件
+config/config.yaml
+  -> python -m trendradar
+  -> trendradar/context.py 抓取、筛选、分析和生成报告
+  -> trendradar/notification/ 推送通知
+  -> output/ 保存运行产物
 ```
 
-MCP 只作为额外的查询分析入口保留。
+MCP 读取这些运行产物，不替代主流程。
